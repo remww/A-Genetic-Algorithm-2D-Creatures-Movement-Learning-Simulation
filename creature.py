@@ -60,6 +60,12 @@ class Creature:
         self.is_alive = True
         self.time_alive = 0.0
         self.fitness = 0.0
+        self.fell_down = False  # 是否摔倒
+
+        # 適應度追蹤（用於計算平均值）
+        self.height_sum = 0.0        # 累積軀幹高度
+        self.stability_sum = 0.0     # 累積穩定性（角度接近0的程度）
+        self.update_count = 0        # 更新次數
 
         # 建立身體
         self._create_body()
@@ -248,6 +254,7 @@ class Creature:
             return
 
         self.time_alive += dt
+        self.update_count += 1
 
         # 更新馬達速度（根據正弦波）
         for i, motor in enumerate(self.motors):
@@ -260,10 +267,51 @@ class Creature:
             # θ(t) = A × sin(ω × t + φ)
             # 馬達速度 = dθ/dt = A × ω × cos(ω × t + φ)
             target_rate = amplitude * frequency * math.cos(frequency * current_time * 2 * math.pi + phase)
-            motor.rate = target_rate * 5  # 放大係數
+            motor.rate = target_rate * 3  # 放大係數提高到 3
 
-        # 更新適應度（X 軸位移）
-        self.fitness = self.torso_body.position.x - self.start_x
+        # 追蹤軀幹高度（用於計算平均高度獎勵）
+        torso_height = self.torso_body.position.y
+        self.height_sum += torso_height
+
+        # 追蹤穩定性（軀幹角度接近 0 的程度）
+        # 角度為 0 時穩定性為 1，角度越大穩定性越低
+        torso_angle = abs(self.torso_body.angle)
+        stability = max(0, 1.0 - torso_angle / (math.pi / 2))  # 傾斜 90 度時穩定性為 0
+        self.stability_sum += stability
+
+        # 計算綜合適應度
+        self._calculate_fitness()
+
+    def _calculate_fitness(self):
+        """計算綜合適應度"""
+        # 1. 距離獎勵（主要因素）
+        distance = self.torso_body.position.x - self.start_x
+        distance_score = distance * FITNESS_DISTANCE_WEIGHT
+
+        # 2. 平均高度獎勵（鼓勵站立）
+        if self.update_count > 0:
+            avg_height = self.height_sum / self.update_count
+            # 高度獎勵：越接近預期站立高度越好
+            height_ratio = min(1.0, avg_height / EXPECTED_STANDING_HEIGHT)
+            height_score = height_ratio * 100 * FITNESS_HEIGHT_WEIGHT
+        else:
+            height_score = 0
+
+        # 3. 平均穩定性獎勵（鼓勵保持直立）
+        if self.update_count > 0:
+            avg_stability = self.stability_sum / self.update_count
+            stability_score = avg_stability * 100 * FITNESS_STABILITY_WEIGHT
+        else:
+            stability_score = 0
+
+        # 4. 存活時間獎勵
+        survival_score = self.time_alive * 10 * FITNESS_SURVIVAL_WEIGHT
+
+        # 5. 摔倒懲罰
+        fall_penalty = FITNESS_FALL_PENALTY if self.fell_down else 0
+
+        # 綜合適應度
+        self.fitness = distance_score + height_score + stability_score + survival_score - fall_penalty
 
     def check_death(self, ground_y: float) -> bool:
         """
@@ -281,6 +329,7 @@ class Creature:
         # 檢查時間限制
         if self.time_alive >= SIMULATION_TIME:
             self.is_alive = False
+            self._calculate_fitness()  # 最終計算適應度
             return True
 
         # 檢查軀幹是否觸地
@@ -288,7 +337,25 @@ class Creature:
             torso_bottom = self.torso_body.position.y - TORSO_HEIGHT / 2
             if torso_bottom <= ground_y + 5:  # 5 pixels 容差
                 self.is_alive = False
+                self.fell_down = True  # 標記為摔倒
+                self._calculate_fitness()  # 最終計算適應度
                 return True
+
+        # 檢查軀幹是否過度傾斜（側躺）
+        torso_angle = abs(self.torso_body.angle)
+        if torso_angle > TORSO_ANGLE_DEATH_THRESHOLD:
+            self.is_alive = False
+            self.fell_down = True
+            self._calculate_fitness()
+            return True
+
+        # 檢查軀幹高度是否過低（趴在地上）
+        torso_height = self.torso_body.position.y
+        if torso_height < TORSO_HEIGHT_DEATH_THRESHOLD:
+            self.is_alive = False
+            self.fell_down = True
+            self._calculate_fitness()
+            return True
 
         return False
 

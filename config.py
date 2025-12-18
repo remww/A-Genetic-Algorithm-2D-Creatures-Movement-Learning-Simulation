@@ -29,7 +29,7 @@ GROUND_HEIGHT = 50  # 地面距離 cell 底部的高度
 # 軀幹
 TORSO_WIDTH = 60
 TORSO_HEIGHT = 30
-TORSO_MASS = 5
+TORSO_MASS = 6  # 稍微降低，讓動作更靈活
 
 # 大腿
 THIGH_LENGTH = 40
@@ -42,23 +42,23 @@ SHIN_WIDTH = 10
 SHIN_MASS = 1.5
 
 # 腳掌（用於增加摩擦力）
-FOOT_WIDTH = 15
+FOOT_WIDTH = 20
 FOOT_HEIGHT = 5
 FOOT_MASS = 0.5
-FOOT_FRICTION = 1.5
+FOOT_FRICTION = 2.0
 
 # 身體各部位摩擦力
 BODY_FRICTION = 0.3
 
 # ==================== 關節設定 ====================
-# 馬達最大力矩
-MOTOR_MAX_FORCE = 5000000
+# 馬達最大力矩（提高讓動作更有力）
+MOTOR_MAX_FORCE = 800000  # 提高到 800000
 
 # 關節角度限制（弧度）
-HIP_MIN_ANGLE = -1.2   # 髖關節最小角度
-HIP_MAX_ANGLE = 0.8    # 髖關節最大角度
-KNEE_MIN_ANGLE = -0.1  # 膝關節最小角度
-KNEE_MAX_ANGLE = 1.5   # 膝關節最大角度
+HIP_MIN_ANGLE = -0.8
+HIP_MAX_ANGLE = 0.6
+KNEE_MIN_ANGLE = 0.0
+KNEE_MAX_ANGLE = 1.2
 
 # ==================== 基因設定 ====================
 # 每個馬達有 3 個參數：振幅(A)、頻率(ω)、相位(φ)
@@ -67,25 +67,40 @@ GENES_PER_MOTOR = 3
 MOTOR_COUNT = 4
 GENE_COUNT = GENES_PER_MOTOR * MOTOR_COUNT  # 12
 
-# 基因範圍
-AMPLITUDE_MIN = 0.3    # 振幅最小值
-AMPLITUDE_MAX = 1.2    # 振幅最大值
-FREQUENCY_MIN = 1.0    # 頻率最小值 (Hz)
-FREQUENCY_MAX = 4.0    # 頻率最大值 (Hz)
-PHASE_MIN = 0.0        # 相位最小值
-PHASE_MAX = 6.28       # 相位最大值 (2π)
+# 基因範圍（提高頻率和振幅，讓動作更快）
+AMPLITUDE_MIN = 0.3
+AMPLITUDE_MAX = 1.0
+FREQUENCY_MIN = 0.5    # 提高最低頻率
+FREQUENCY_MAX = 2.5    # 提高最高頻率
+PHASE_MIN = 0.0
+PHASE_MAX = 6.28       # 2π
 
 # ==================== 演化設定 ====================
-POPULATION_SIZE = 20       # 族群大小（每代 20 隻）
-SIMULATION_TIME = 10.0     # 每隻生物的模擬時間（秒）
-ELITE_RATIO = 0.2          # 菁英比例（前 20%）
-CROSSOVER_RATE = 0.8       # 交叉機率
-MUTATION_RATE = 0.1        # 突變機率
-MUTATION_STRENGTH = 0.2    # 突變強度（基因值的 ±20%）
+POPULATION_SIZE = 30
+SIMULATION_TIME = 20.0     # 降到 20 秒（加快每代速度）
+ELITE_RATIO = 0.1          # 降低菁英比例（更高選擇壓力）
+CROSSOVER_RATE = 0.8
+MUTATION_RATE = 0.2        # 提高突變率（加快探索）
+MUTATION_STRENGTH = 0.25   # 提高突變強度
+
+# ==================== 適應度設定 ====================
+# 適應度 = 距離權重 × 距離 + 高度權重 × 平均高度 + 穩定權重 × 穩定分數 - 摔倒懲罰
+FITNESS_DISTANCE_WEIGHT = 1.0      # 距離權重（主要）
+FITNESS_HEIGHT_WEIGHT = 0.3        # 降低高度權重
+FITNESS_STABILITY_WEIGHT = 0.2     # 降低穩定性權重
+FITNESS_SURVIVAL_WEIGHT = 0.1      # 降低存活權重
+FITNESS_FALL_PENALTY = 30.0        # 降低摔倒懲罰
+
+# 預期站立高度（用於計算高度獎勵）
+EXPECTED_STANDING_HEIGHT = THIGH_LENGTH + SHIN_LENGTH + FOOT_HEIGHT + TORSO_HEIGHT / 2
 
 # ==================== 死亡條件 ====================
 # 軀幹接觸地面即為摔倒
 TORSO_TOUCH_GROUND_DEATH = True
+# 軀幹傾斜超過此角度（弧度）視為摔倒（約 52 度）
+TORSO_ANGLE_DEATH_THRESHOLD = 0.9
+# 軀幹高度低於此值視為摔倒
+TORSO_HEIGHT_DEATH_THRESHOLD = 40
 
 # ==================== 視角設定 ====================
 # 當生物超出視角右邊界時，視角向右移動的距離
