@@ -229,9 +229,13 @@ class Simulation:
 
                     # 打印統計
                     avg_fitness = sum(c.fitness for c in self.creatures) / len(self.creatures)
+                    stats = self.ga.get_statistics()
+                    diversity = stats.get('current_diversity', 1.0)
+                    mut_rate = stats.get('current_mutation_rate', MUTATION_RATE)
+
                     print(f"Generation {self.ga.generation + 1} complete: "
                           f"Best={current_best:.1f}, Avg={avg_fitness:.1f}, "
-                          f"All-time Best={self.best_fitness_ever:.1f}")
+                          f"Diversity={diversity:.2f}, MutRate={mut_rate:.0%}")
 
                     # 初始化下一代
                     self._init_generation()

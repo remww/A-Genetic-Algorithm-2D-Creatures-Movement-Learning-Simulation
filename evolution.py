@@ -11,7 +11,7 @@ class GeneticAlgorithm:
     """
     遺傳演算法
 
-    選擇策略：菁英保留 + 輪盤選擇
+    選擇策略：菁英保留 + 錦標賽選擇（可切換為輪盤選擇）
     交叉方式：單點交叉
     突變方式：高斯突變
     """
@@ -20,6 +20,11 @@ class GeneticAlgorithm:
         self.generation = 0
         self.best_fitness_history = []
         self.avg_fitness_history = []
+        self.diversity_history = []
+
+        # 自適應突變參數（會根據多樣性動態調整）
+        self.current_mutation_rate = MUTATION_RATE
+        self.current_mutation_strength = MUTATION_STRENGTH
 
     def create_initial_population(self) -> list:
         """
@@ -65,6 +70,11 @@ class GeneticAlgorithm:
         self.best_fitness_history.append(best_fitness)
         self.avg_fitness_history.append(avg_fitness)
 
+        # 計算並記錄多樣性，更新自適應突變參數
+        diversity = self._calculate_diversity(population)
+        self.diversity_history.append(diversity)
+        self._update_adaptive_mutation(diversity)
+
         # 將族群按適應度排序
         sorted_pairs = sorted(zip(fitness_scores, population), key=lambda x: x[0], reverse=True)
         sorted_population = [genes for _, genes in sorted_pairs]
@@ -79,9 +89,9 @@ class GeneticAlgorithm:
 
         # 2. 產生剩餘的個體（透過選擇、交叉、突變）
         while len(new_population) < POPULATION_SIZE:
-            # 選擇兩個親代
-            parent1 = self._roulette_selection(sorted_population, sorted_fitness)
-            parent2 = self._roulette_selection(sorted_population, sorted_fitness)
+            # 選擇兩個親代（根據設定使用不同選擇策略）
+            parent1 = self._select_parent(sorted_population, sorted_fitness)
+            parent2 = self._select_parent(sorted_population, sorted_fitness)
 
             # 交叉
             if random.random() < CROSSOVER_RATE:
@@ -98,6 +108,43 @@ class GeneticAlgorithm:
                 new_population.append(child2)
 
         return new_population
+
+    def _tournament_selection(self, population: list, fitness_scores: list) -> list:
+        """
+        錦標賽選擇
+
+        隨機選取 TOURNAMENT_SIZE 個個體，選擇其中適應度最高的
+
+        Args:
+            population: 族群
+            fitness_scores: 適應度分數
+
+        Returns:
+            選中的個體基因
+        """
+        # 隨機選取參賽者
+        indices = random.sample(range(len(population)), min(TOURNAMENT_SIZE, len(population)))
+
+        # 找出適應度最高的
+        winner_idx = max(indices, key=lambda i: fitness_scores[i])
+
+        return population[winner_idx].copy()
+
+    def _select_parent(self, population: list, fitness_scores: list) -> list:
+        """
+        根據設定選擇親代
+
+        Args:
+            population: 族群
+            fitness_scores: 適應度分數
+
+        Returns:
+            選中的個體基因
+        """
+        if SELECTION_METHOD == 'tournament':
+            return self._tournament_selection(population, fitness_scores)
+        else:
+            return self._roulette_selection(population, fitness_scores)
 
     def _roulette_selection(self, population: list, fitness_scores: list) -> list:
         """
@@ -128,6 +175,74 @@ class GeneticAlgorithm:
 
         return population[-1].copy()
 
+    def _calculate_diversity(self, population: list) -> float:
+        """
+        計算族群多樣性（基因變異程度）
+
+        使用所有基因的標準差平均值來衡量多樣性
+
+        Args:
+            population: 族群基因列表
+
+        Returns:
+            多樣性指數（0~1，越高越多樣）
+        """
+        if len(population) < 2:
+            return 1.0
+
+        gene_count = len(population[0])
+        total_variance = 0.0
+
+        for gene_idx in range(gene_count):
+            # 收集所有個體在這個基因位置的值
+            gene_values = [individual[gene_idx] for individual in population]
+
+            # 計算標準差
+            mean = sum(gene_values) / len(gene_values)
+            variance = sum((v - mean) ** 2 for v in gene_values) / len(gene_values)
+            std_dev = variance ** 0.5
+
+            # 根據基因類型正規化（除以該基因的範圍）
+            gene_type = gene_idx % GENES_PER_MOTOR
+            if gene_type == 0:  # 振幅
+                gene_range = AMPLITUDE_MAX - AMPLITUDE_MIN
+            elif gene_type == 1:  # 頻率
+                gene_range = FREQUENCY_MAX - FREQUENCY_MIN
+            else:  # 相位
+                gene_range = PHASE_MAX - PHASE_MIN
+
+            normalized_std = std_dev / gene_range if gene_range > 0 else 0
+            total_variance += normalized_std
+
+        # 平均多樣性
+        diversity = total_variance / gene_count
+
+        return min(1.0, diversity)  # 限制在 0~1
+
+    def _update_adaptive_mutation(self, diversity: float):
+        """
+        根據多樣性調整突變參數
+
+        當多樣性低時，提高突變率和強度以增加探索
+
+        Args:
+            diversity: 當前多樣性指數
+        """
+        if not ADAPTIVE_MUTATION:
+            return
+
+        if diversity < DIVERSITY_THRESHOLD:
+            # 多樣性低，提高突變
+            # 使用線性插值：多樣性越低，突變越高
+            ratio = 1.0 - (diversity / DIVERSITY_THRESHOLD)
+
+            self.current_mutation_rate = MUTATION_RATE + ratio * (MUTATION_RATE_MAX - MUTATION_RATE)
+            self.current_mutation_strength = MUTATION_STRENGTH + ratio * (MUTATION_STRENGTH_MAX - MUTATION_STRENGTH)
+        else:
+            # 多樣性足夠，使用基礎突變率
+            self.current_mutation_rate = MUTATION_RATE
+            self.current_mutation_strength = MUTATION_STRENGTH
+
     def _crossover(self, parent1: list, parent2: list) -> tuple:
         """
         單點交叉
@@ -149,7 +264,7 @@ class GeneticAlgorithm:
 
     def _mutate(self, genes: list) -> list:
         """
-        高斯突變（改進版：相位使用 wrap 而非 clamp）
+        高斯突變（改進版：自適應突變率 + 相位 wrap）
 
         Args:
             genes: 基因列表
@@ -159,18 +274,22 @@ class GeneticAlgorithm:
         """
         mutated = genes.copy()
 
+        # 使用自適應的突變參數
+        mutation_rate = self.current_mutation_rate
+        mutation_strength = self.current_mutation_strength
+
         for i in range(len(mutated)):
-            if random.random() < MUTATION_RATE:
+            if random.random() < mutation_rate:
                 gene_type = i % GENES_PER_MOTOR
 
                 if gene_type == 0:  # 振幅
-                    mutation = random.gauss(0, MUTATION_STRENGTH * (AMPLITUDE_MAX - AMPLITUDE_MIN))
+                    mutation = random.gauss(0, mutation_strength * (AMPLITUDE_MAX - AMPLITUDE_MIN))
                     mutated[i] = max(AMPLITUDE_MIN, min(AMPLITUDE_MAX, mutated[i] + mutation))
                 elif gene_type == 1:  # 頻率
-                    mutation = random.gauss(0, MUTATION_STRENGTH * (FREQUENCY_MAX - FREQUENCY_MIN))
+                    mutation = random.gauss(0, mutation_strength * (FREQUENCY_MAX - FREQUENCY_MIN))
                     mutated[i] = max(FREQUENCY_MIN, min(FREQUENCY_MAX, mutated[i] + mutation))
                 else:  # 相位（使用 wrap 而非 clamp，避免邊界堆積）
-                    mutation = random.gauss(0, MUTATION_STRENGTH * (PHASE_MAX - PHASE_MIN))
+                    mutation = random.gauss(0, mutation_strength * (PHASE_MAX - PHASE_MIN))
                     mutated[i] = (mutated[i] + mutation) % PHASE_MAX  # wrap around
 
         return mutated
@@ -186,6 +305,10 @@ class GeneticAlgorithm:
             'generation': self.generation,
             'best_fitness_history': self.best_fitness_history,
             'avg_fitness_history': self.avg_fitness_history,
+            'diversity_history': self.diversity_history,
             'current_best': self.best_fitness_history[-1] if self.best_fitness_history else 0,
             'current_avg': self.avg_fitness_history[-1] if self.avg_fitness_history else 0,
+            'current_diversity': self.diversity_history[-1] if self.diversity_history else 1.0,
+            'current_mutation_rate': self.current_mutation_rate,
+            'current_mutation_strength': self.current_mutation_strength,
         }

@@ -209,12 +209,46 @@ class Creature:
 
         return height_ok and angle_ok
 
+    def _calculate_reflex_correction(self) -> tuple:
+        """
+        計算反射修正量
+
+        Returns:
+            (hip_correction, knee_correction): 髖關節和膝關節的修正量
+        """
+        if not REFLEX_ENABLED:
+            return 0.0, 0.0
+
+        # 獲取軀幹狀態
+        torso_angle = self.torso_body.angle  # 正值 = 前傾，負值 = 後傾
+        torso_angular_velocity = self.torso_body.angular_velocity
+
+        # 平衡反射：當軀幹傾斜超過閾值時啟動
+        hip_correction = 0.0
+        knee_correction = 0.0
+
+        if abs(torso_angle) > REFLEX_BALANCE_THRESHOLD:
+            # 髖關節反射：往傾斜的反方向施力
+            # 前傾時（angle > 0），髖關節應該往後擺（負修正）
+            hip_correction = -torso_angle * REFLEX_BALANCE_GAIN
+
+            # 膝關節輕微配合
+            knee_correction = -torso_angle * REFLEX_BALANCE_GAIN * 0.3
+
+        # 角速度阻尼：防止過度擺動
+        hip_correction -= torso_angular_velocity * REFLEX_VELOCITY_GAIN
+
+        return hip_correction, knee_correction
+
     def update(self, dt: float, current_time: float):
         if not self.is_alive:
             return
 
         self.time_alive += dt
         self.update_count += 1
+
+        # 計算反射修正量
+        hip_correction, knee_correction = self._calculate_reflex_correction()
 
         # 更新馬達速度並累積能量消耗
         frame_energy = 0.0
@@ -224,7 +258,16 @@ class Creature:
             frequency = self.genes[gene_base + 1]
             phase = self.genes[gene_base + 2]
 
+            # 基礎正弦波輸出
             target_rate = amplitude * frequency * math.cos(frequency * current_time * 2 * math.pi + phase)
+
+            # 加入反射修正
+            # 馬達 0, 2 是髖關節；馬達 1, 3 是膝關節
+            if i in [0, 2]:  # 髖關節
+                target_rate += hip_correction
+            else:  # 膝關節
+                target_rate += knee_correction
+
             motor.rate = target_rate * 3
 
             # 累積能量消耗（馬達速度的絕對值）

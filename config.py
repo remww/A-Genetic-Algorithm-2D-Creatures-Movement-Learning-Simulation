@@ -70,8 +70,18 @@ POPULATION_SIZE = 50           # 增加到 50（更多多樣性）
 SIMULATION_TIME = 15.0         # 縮短到 15 秒（加快迭代）
 ELITE_RATIO = 0.1
 CROSSOVER_RATE = 0.8
-MUTATION_RATE = 0.15           # 降低到 15%
-MUTATION_STRENGTH = 0.15       # 降低到 0.15
+MUTATION_RATE = 0.25           # 提高到 25%（原 15%）
+MUTATION_STRENGTH = 0.25       # 提高到 0.25（原 0.15）
+
+# 選擇策略設定
+SELECTION_METHOD = 'tournament'  # 'roulette' 或 'tournament'
+TOURNAMENT_SIZE = 3              # 錦標賽大小（每次隨機選幾個比較）
+
+# 自適應突變設定（維持多樣性）
+ADAPTIVE_MUTATION = True                # 啟用自適應突變
+MUTATION_RATE_MAX = 0.5                 # 最大突變率（多樣性低時）
+MUTATION_STRENGTH_MAX = 0.4             # 最大突變強度
+DIVERSITY_THRESHOLD = 0.1               # 多樣性閾值（低於此值時提高突變）
 
 # ==================== 直立判定設定（新增）====================
 # 直立高度閾值：軀幹高度必須高於此值才算直立
@@ -115,3 +125,10 @@ COLOR_DEAD = (150, 50, 50)
 # ==================== 錄影設定 ====================
 RECORDING_FPS = 30
 RECORDING_FILENAME = "evolution_recording.mp4"
+
+# ==================== 反射機制設定 ====================
+# 平衡反射：當軀幹傾斜時，調整髖關節輸出
+REFLEX_ENABLED = True
+REFLEX_BALANCE_GAIN = 2.0          # 平衡反射增益（角度 -> 修正量）
+REFLEX_BALANCE_THRESHOLD = 0.15   # 觸發平衡反射的角度閾值（弧度，約 8.6 度）
+REFLEX_VELOCITY_GAIN = 0.5        # 角速度反射增益（防止過度擺動）
