@@ -149,7 +149,7 @@ class GeneticAlgorithm:
 
     def _mutate(self, genes: list) -> list:
         """
-        高斯突變
+        高斯突變（改進版：相位使用 wrap 而非 clamp）
 
         Args:
             genes: 基因列表
@@ -161,7 +161,6 @@ class GeneticAlgorithm:
 
         for i in range(len(mutated)):
             if random.random() < MUTATION_RATE:
-                # 確定基因類型
                 gene_type = i % GENES_PER_MOTOR
 
                 if gene_type == 0:  # 振幅
@@ -170,9 +169,9 @@ class GeneticAlgorithm:
                 elif gene_type == 1:  # 頻率
                     mutation = random.gauss(0, MUTATION_STRENGTH * (FREQUENCY_MAX - FREQUENCY_MIN))
                     mutated[i] = max(FREQUENCY_MIN, min(FREQUENCY_MAX, mutated[i] + mutation))
-                else:  # 相位
+                else:  # 相位（使用 wrap 而非 clamp，避免邊界堆積）
                     mutation = random.gauss(0, MUTATION_STRENGTH * (PHASE_MAX - PHASE_MIN))
-                    mutated[i] = max(PHASE_MIN, min(PHASE_MAX, mutated[i] + mutation))
+                    mutated[i] = (mutated[i] + mutation) % PHASE_MAX  # wrap around
 
         return mutated
 
