@@ -25,10 +25,33 @@ PHYSICS_STEPS = 10
 GROUND_FRICTION = 1.0
 GROUND_HEIGHT = 50
 
+# ==================== 生物類型設定 ====================
+CREATURE_TYPE = 'BIPED'  # 選項: 'BIPED' (雙足) 或 'QUADRUPED' (四足)
+
 # ==================== 生物結構設定 ====================
-TORSO_WIDTH = 60
-TORSO_HEIGHT = 30
-TORSO_MASS = 6
+if CREATURE_TYPE == 'QUADRUPED':
+    TORSO_WIDTH = 100              # 拉長軀幹
+    TORSO_HEIGHT = 20              # 稍微變扁
+    TORSO_MASS = 8                 # 增加質量
+    MOTOR_COUNT = 8                # 8 個馬達 (4 條腿 x 2 關節)
+    
+    # 四足關節設定
+    HIP_MIN_ANGLE = -1.2
+    HIP_MAX_ANGLE = 1.2
+    KNEE_MIN_ANGLE = -0.5
+    KNEE_MAX_ANGLE = 1.5
+
+else:  # BIPED
+    TORSO_WIDTH = 60
+    TORSO_HEIGHT = 30
+    TORSO_MASS = 6
+    MOTOR_COUNT = 4                # 4 個馬達 (2 條腿 x 2 關節)
+
+    # 雙足關節設定
+    HIP_MIN_ANGLE = -0.8
+    HIP_MAX_ANGLE = 0.6
+    KNEE_MIN_ANGLE = 0.0
+    KNEE_MAX_ANGLE = 1.2
 
 THIGH_LENGTH = 40
 THIGH_WIDTH = 12
@@ -45,17 +68,11 @@ FOOT_FRICTION = 2.0
 
 BODY_FRICTION = 0.3
 
-# ==================== 關節設定 ====================
-MOTOR_MAX_FORCE = 800000
-
-HIP_MIN_ANGLE = -0.8
-HIP_MAX_ANGLE = 0.6
-KNEE_MIN_ANGLE = 0.0
-KNEE_MAX_ANGLE = 1.2
+# ==================== 關節設定 (共用) ====================
+MOTOR_MAX_FORCE = 400000       # 降低最大力矩，防止物理爆炸 (原 800000)
 
 # ==================== 基因設定 ====================
 GENES_PER_MOTOR = 3
-MOTOR_COUNT = 4
 GENE_COUNT = GENES_PER_MOTOR * MOTOR_COUNT
 
 AMPLITUDE_MIN = 0.3
@@ -90,10 +107,14 @@ UPRIGHT_HEIGHT_THRESHOLD = 50
 UPRIGHT_ANGLE_THRESHOLD = 0.35
 
 # ==================== 適應度設定（改進版）====================
-# 新公式：距離分數 = 直立時累積距離 × (高度比²) × (穩定性²)
-FITNESS_DISTANCE_WEIGHT = 1.0      # 距離權重
-FITNESS_UPRIGHT_WEIGHT = 1.0       # 直立時間獎勵權重（新增）
-FITNESS_SURVIVAL_WEIGHT = 0.1      # 存活時間權重（降低）
+# 新公式：大幅簡化，以距離為絕對核心
+FITNESS_DISTANCE_WEIGHT = 5.0      # 距離權重 (主要分數來源)
+FITNESS_UPRIGHT_WEIGHT = 0.1       # 直立時間權重 (僅作為微小獎勵，避免為了直立不敢動)
+FITNESS_SURVIVAL_WEIGHT = 0.0      # 存活時間權重 (移除，避免生物學會龜縮不動)
+FITNESS_ENERGY_PENALTY = 0.0       # 能量懲罰 (移除，初期允許高能耗的動作)
+
+# ==================== 控制器設定（新增）====================
+SHARED_FREQUENCY = True            # 是否強制所有馬達使用相同頻率 (協調性)
 
 # 懲罰設定
 FITNESS_FALL_PENALTY = 200.0       # 摔倒懲罰（大幅提高！）
@@ -129,6 +150,6 @@ RECORDING_FILENAME = "evolution_recording.mp4"
 # ==================== 反射機制設定 ====================
 # 平衡反射：當軀幹傾斜時，調整髖關節輸出
 REFLEX_ENABLED = True
-REFLEX_BALANCE_GAIN = 2.0          # 平衡反射增益（角度 -> 修正量）
+REFLEX_BALANCE_GAIN = 1.0          # 降低反射增益 (四足有4個髖，總力矩較大)
 REFLEX_BALANCE_THRESHOLD = 0.15   # 觸發平衡反射的角度閾值（弧度，約 8.6 度）
 REFLEX_VELOCITY_GAIN = 0.5        # 角速度反射增益（防止過度擺動）

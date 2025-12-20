@@ -12,22 +12,18 @@ from config import *
 
 class Creature:
     """
-    生物類別
+    生物類別 (四足版本)
 
     身體結構：
-        [軀幹 Torso]
-         /        \
-    [左大腿]     [右大腿]
-       |           |
-    [左小腿]     [右小腿]
-       |           |
-     (左腳)      (右腳)
+        [       軀幹 (水平)       ]
+        /      \        /      \
+    [後左腿] [後右腿] [前左腿] [前右腿]
 
-    4 個馬達：
-    - 馬達 0：左髖關節（軀幹 ↔ 左大腿）
-    - 馬達 1：左膝關節（左大腿 ↔ 左小腿）
-    - 馬達 2：右髖關節（軀幹 ↔ 右大腿）
-    - 馬達 3：右膝關節（右大腿 ↔ 右小腿）
+    8 個馬達：
+    - 0, 1: 後左 (髖, 膝)
+    - 2, 3: 後右 (髖, 膝)
+    - 4, 5: 前左 (髖, 膝)
+    - 6, 7: 前右 (髖, 膝)
     """
 
     def __init__(self, space: pymunk.Space, start_x: float, start_y: float,
@@ -52,20 +48,17 @@ class Creature:
         self.fitness = 0.0
         self.fell_down = False
 
-        # 適應度追蹤（改進版）
+        # 適應度追蹤
         self.height_sum = 0.0
         self.stability_sum = 0.0
         self.update_count = 0
-
-        # 新增：只在直立時累積的距離
         self.upright_distance = 0.0
         self.last_x = start_x
-
-        # 新增：能量消耗追蹤
         self.energy_used = 0.0
-
-        # 新增：直立時間計數
         self.upright_frames = 0
+
+        # 身體部件字典 (用於渲染)
+        self.named_parts = {}
 
         self._create_body()
 
@@ -78,13 +71,16 @@ class Creature:
         return genes
 
     def _create_box_body(self, x: float, y: float, width: float, height: float,
-                         mass: float, friction: float = BODY_FRICTION) -> tuple:
+                         mass: float, friction: float = BODY_FRICTION, group: int = 0) -> tuple:
         moment = pymunk.moment_for_box(mass, (width, height))
         body = pymunk.Body(mass, moment)
         body.position = (x, y)
 
         shape = pymunk.Poly.create_box(body, (width, height))
         shape.friction = friction
+        shape.filter = pymunk.ShapeFilter(group=group)  # 使用 group 防止同組碰撞
+        
+        # 身體碰撞類型設為 1，軀幹稍後覆蓋
         shape.collision_type = 1
 
         self.space.add(body, shape)
@@ -93,84 +89,115 @@ class Creature:
 
         return body, shape
 
+    def _create_leg(self, hip_x: float, hip_y: float, group: int, motor_start_index: int, prefix: str):
+        """
+        建立一條腿
+        Args:
+            hip_x, hip_y: 髖關節位置
+            group: 碰撞群組（避免腿部自交）
+            motor_start_index: 該腿的第一個馬達索引 (髖)
+            prefix: 命名後綴 (e.g., "back_left")
+        """
+        # 大腿
+        thigh_y = hip_y - THIGH_LENGTH / 2
+        thigh_body, thigh_shape = self._create_box_body(
+            hip_x, thigh_y, THIGH_WIDTH, THIGH_LENGTH, THIGH_MASS, group=group
+        )
+        self.named_parts[f"{prefix}_thigh"] = (thigh_body, thigh_shape)
+
+        # 小腿
+        shin_y = thigh_y - THIGH_LENGTH / 2 - SHIN_LENGTH / 2
+        shin_body, shin_shape = self._create_box_body(
+            hip_x, shin_y, SHIN_WIDTH, SHIN_LENGTH, SHIN_MASS, group=group
+        )
+        self.named_parts[f"{prefix}_shin"] = (shin_body, shin_shape)
+
+        # 腳
+        foot_y = shin_y - SHIN_LENGTH / 2 - FOOT_HEIGHT / 2
+        foot_body, foot_shape = self._create_box_body(
+            hip_x, foot_y, FOOT_WIDTH, FOOT_HEIGHT, FOOT_MASS, FOOT_FRICTION, group=group
+        )
+        self.named_parts[f"{prefix}_foot"] = (foot_body, foot_shape)
+
+        # 連接：軀幹 -> 大腿 (髖)
+        self._create_motor_joint(
+            self.torso_body, thigh_body,
+            (hip_x, hip_y), HIP_MIN_ANGLE, HIP_MAX_ANGLE, motor_index=motor_start_index
+        )
+
+        # 連接：大腿 -> 小腿 (膝)
+        self._create_motor_joint(
+            thigh_body, shin_body,
+            (hip_x, thigh_y - THIGH_LENGTH / 2), KNEE_MIN_ANGLE, KNEE_MAX_ANGLE, motor_index=motor_start_index + 1
+        )
+
+        # 連接：小腿 -> 腳 (固定)
+        self._create_fixed_joint(
+            shin_body, foot_body, (hip_x, shin_y - SHIN_LENGTH / 2)
+        )
+
     def _create_body(self):
+        """根據設定選擇建立雙足或四足身體"""
+        if CREATURE_TYPE == 'QUADRUPED':
+            self._create_quadruped_body()
+        else:
+            self._create_biped_body()
+
+    def _create_biped_body(self):
+        """建立雙足身體 (舊版邏輯)"""
         x, y = self.start_x, self.start_y
+        
+        # 使用單一 collision group 避免自身碰撞
+        # 只要 group 非 0 且相同，彼此就不會碰撞
+        unique_group = self.creature_id + 1
 
         # 軀幹
         torso_y = y + TORSO_HEIGHT / 2
         self.torso_body, self.torso_shape = self._create_box_body(
-            x, torso_y, TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS
+            x, torso_y, TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS, group=unique_group
         )
         self.torso_shape.collision_type = 2
+        self.named_parts['torso'] = (self.torso_body, self.torso_shape)
 
-        # 左大腿
+        # 左腿
         left_hip_x = x - TORSO_WIDTH / 4
-        left_thigh_y = torso_y - TORSO_HEIGHT / 2 - THIGH_LENGTH / 2
-        self.left_thigh_body, self.left_thigh_shape = self._create_box_body(
-            left_hip_x, left_thigh_y, THIGH_WIDTH, THIGH_LENGTH, THIGH_MASS
-        )
+        hip_y = torso_y - TORSO_HEIGHT / 2
+        self._create_leg(left_hip_x, hip_y, group=unique_group, motor_start_index=0, prefix="left")
 
-        # 左小腿
-        left_shin_y = left_thigh_y - THIGH_LENGTH / 2 - SHIN_LENGTH / 2
-        self.left_shin_body, self.left_shin_shape = self._create_box_body(
-            left_hip_x, left_shin_y, SHIN_WIDTH, SHIN_LENGTH, SHIN_MASS
-        )
-
-        # 左腳
-        left_foot_y = left_shin_y - SHIN_LENGTH / 2 - FOOT_HEIGHT / 2
-        self.left_foot_body, self.left_foot_shape = self._create_box_body(
-            left_hip_x, left_foot_y, FOOT_WIDTH, FOOT_HEIGHT, FOOT_MASS, FOOT_FRICTION
-        )
-
-        # 右大腿
+        # 右腿
         right_hip_x = x + TORSO_WIDTH / 4
-        right_thigh_y = torso_y - TORSO_HEIGHT / 2 - THIGH_LENGTH / 2
-        self.right_thigh_body, self.right_thigh_shape = self._create_box_body(
-            right_hip_x, right_thigh_y, THIGH_WIDTH, THIGH_LENGTH, THIGH_MASS
+        self._create_leg(right_hip_x, hip_y, group=unique_group, motor_start_index=2, prefix="right")
+
+    def _create_quadruped_body(self):
+        x, y = self.start_x, self.start_y
+
+        # 使用單一 collision group 避免自身碰撞 (包含左右腿之間)
+        unique_group = self.creature_id + 1
+
+        # 1. 軀幹 (水平長方形)
+        torso_y = y + TORSO_HEIGHT / 2 + THIGH_LENGTH + SHIN_LENGTH # 確保起始高度足夠
+        self.torso_body, self.torso_shape = self._create_box_body(
+            x, torso_y, TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS, group=unique_group
         )
+        self.torso_shape.collision_type = 2
+        self.named_parts['torso'] = (self.torso_body, self.torso_shape)
 
-        # 右小腿
-        right_shin_y = right_thigh_y - THIGH_LENGTH / 2 - SHIN_LENGTH / 2
-        self.right_shin_body, self.right_shin_shape = self._create_box_body(
-            right_hip_x, right_shin_y, SHIN_WIDTH, SHIN_LENGTH, SHIN_MASS
-        )
+        # 計算前後腿的髖關節位置
+        # 前腿在右側 (+x), 後腿在左側 (-x)
+        offset_x = TORSO_WIDTH / 2 - 10 
+        front_hip_x = x + offset_x
+        back_hip_x = x - offset_x
+        hip_y = torso_y - TORSO_HEIGHT / 2
 
-        # 右腳
-        right_foot_y = right_shin_y - SHIN_LENGTH / 2 - FOOT_HEIGHT / 2
-        self.right_foot_body, self.right_foot_shape = self._create_box_body(
-            right_hip_x, right_foot_y, FOOT_WIDTH, FOOT_HEIGHT, FOOT_MASS, FOOT_FRICTION
-        )
+        # 2. 後腿 (Back Legs)
+        # 關鍵：所有腿使用相同的 unique_group，這樣它們重疊時不會爆炸
+        self._create_leg(back_hip_x, hip_y, group=unique_group, motor_start_index=0, prefix="back_left")
+        self._create_leg(back_hip_x, hip_y, group=unique_group, motor_start_index=2, prefix="back_right")
 
-        # 關節連接
-        left_hip_anchor = (left_hip_x, torso_y - TORSO_HEIGHT / 2)
-        self._create_motor_joint(
-            self.torso_body, self.left_thigh_body,
-            left_hip_anchor, HIP_MIN_ANGLE, HIP_MAX_ANGLE, motor_index=0
-        )
+        # 3. 前腿 (Front Legs)
+        self._create_leg(front_hip_x, hip_y, group=unique_group, motor_start_index=4, prefix="front_left")
+        self._create_leg(front_hip_x, hip_y, group=unique_group, motor_start_index=6, prefix="front_right")
 
-        left_knee_anchor = (left_hip_x, left_thigh_y - THIGH_LENGTH / 2)
-        self._create_motor_joint(
-            self.left_thigh_body, self.left_shin_body,
-            left_knee_anchor, KNEE_MIN_ANGLE, KNEE_MAX_ANGLE, motor_index=1
-        )
-
-        left_ankle_anchor = (left_hip_x, left_shin_y - SHIN_LENGTH / 2)
-        self._create_fixed_joint(self.left_shin_body, self.left_foot_body, left_ankle_anchor)
-
-        right_hip_anchor = (right_hip_x, torso_y - TORSO_HEIGHT / 2)
-        self._create_motor_joint(
-            self.torso_body, self.right_thigh_body,
-            right_hip_anchor, HIP_MIN_ANGLE, HIP_MAX_ANGLE, motor_index=2
-        )
-
-        right_knee_anchor = (right_hip_x, right_thigh_y - THIGH_LENGTH / 2)
-        self._create_motor_joint(
-            self.right_thigh_body, self.right_shin_body,
-            right_knee_anchor, KNEE_MIN_ANGLE, KNEE_MAX_ANGLE, motor_index=3
-        )
-
-        right_ankle_anchor = (right_hip_x, right_shin_y - SHIN_LENGTH / 2)
-        self._create_fixed_joint(self.right_shin_body, self.right_foot_body, right_ankle_anchor)
 
     def _create_motor_joint(self, body_a: pymunk.Body, body_b: pymunk.Body,
                             anchor: tuple, min_angle: float, max_angle: float,
@@ -203,7 +230,6 @@ class Creature:
         torso_height = self.torso_body.position.y
         torso_angle = abs(self.torso_body.angle)
 
-        # 直立條件：高度足夠且角度小
         height_ok = torso_height > UPRIGHT_HEIGHT_THRESHOLD
         angle_ok = torso_angle < UPRIGHT_ANGLE_THRESHOLD
 
@@ -211,31 +237,24 @@ class Creature:
 
     def _calculate_reflex_correction(self) -> tuple:
         """
-        計算反射修正量
-
-        Returns:
-            (hip_correction, knee_correction): 髖關節和膝關節的修正量
+        計算反射修正量 (支援雙足與四足)
         """
         if not REFLEX_ENABLED:
             return 0.0, 0.0
 
-        # 獲取軀幹狀態
-        torso_angle = self.torso_body.angle  # 正值 = 前傾，負值 = 後傾
+        torso_angle = self.torso_body.angle
         torso_angular_velocity = self.torso_body.angular_velocity
 
-        # 平衡反射：當軀幹傾斜超過閾值時啟動
         hip_correction = 0.0
         knee_correction = 0.0
 
         if abs(torso_angle) > REFLEX_BALANCE_THRESHOLD:
-            # 髖關節反射：往傾斜的反方向施力
-            # 前傾時（angle > 0），髖關節應該往後擺（負修正）
             hip_correction = -torso_angle * REFLEX_BALANCE_GAIN
+            
+            # 只有雙足模式下，才讓膝關節參與平衡反射
+            if CREATURE_TYPE == 'BIPED':
+                knee_correction = -torso_angle * REFLEX_BALANCE_GAIN * 0.3
 
-            # 膝關節輕微配合
-            knee_correction = -torso_angle * REFLEX_BALANCE_GAIN * 0.3
-
-        # 角速度阻尼：防止過度擺動
         hip_correction -= torso_angular_velocity * REFLEX_VELOCITY_GAIN
 
         return hip_correction, knee_correction
@@ -247,30 +266,43 @@ class Creature:
         self.time_alive += dt
         self.update_count += 1
 
-        # 計算反射修正量
         hip_correction, knee_correction = self._calculate_reflex_correction()
 
-        # 更新馬達速度並累積能量消耗
+        # 獲取共享頻率 (如果啟用) - 使用馬達 0 的基因作為基準
+        shared_freq = self.genes[1] if SHARED_FREQUENCY else 0.0
+        
         frame_energy = 0.0
+
         for i, motor in enumerate(self.motors):
             gene_base = i * GENES_PER_MOTOR
             amplitude = self.genes[gene_base]
-            frequency = self.genes[gene_base + 1]
+            
+            if SHARED_FREQUENCY:
+                frequency = shared_freq
+            else:
+                frequency = self.genes[gene_base + 1]
+                
             phase = self.genes[gene_base + 2]
 
-            # 基礎正弦波輸出
             target_rate = amplitude * frequency * math.cos(frequency * current_time * 2 * math.pi + phase)
 
-            # 加入反射修正
-            # 馬達 0, 2 是髖關節；馬達 1, 3 是膝關節
-            if i in [0, 2]:  # 髖關節
+            # 判斷是否為髖關節
+            is_hip = False
+            if CREATURE_TYPE == 'QUADRUPED':
+                 # 四足: 0, 2, 4, 6 是髖
+                 if i % 2 == 0:
+                     is_hip = True
+            else:
+                 # 雙足: 0, 2 是髖
+                 if i in [0, 2]:
+                     is_hip = True
+
+            if is_hip:
                 target_rate += hip_correction
-            else:  # 膝關節
+            else:
                 target_rate += knee_correction
 
             motor.rate = target_rate * 3
-
-            # 累積能量消耗（馬達速度的絕對值）
             frame_energy += abs(motor.rate)
 
         self.energy_used += frame_energy
@@ -290,7 +322,6 @@ class Creature:
 
         if self._is_upright():
             self.upright_frames += 1
-            # 只累積正向（往右）的距離
             if dx > 0:
                 self.upright_distance += dx
 
@@ -298,50 +329,35 @@ class Creature:
 
         self._calculate_fitness()
 
+
     def _calculate_fitness(self):
-        """計算綜合適應度（改進版：乘法綁定 + 能量懲罰）"""
+        """計算綜合適應度（大幅簡化版）"""
+        
+        # 1. 距離分數（核心指標）
+        # 直接使用累積的有效距離，不再乘以穩定性係數
+        distance_score = self.upright_distance * FITNESS_DISTANCE_WEIGHT
+        
+        # 2. 直立時間獎勵（輔助指標）
+        # 給予微小獎勵，鼓勵站著，但權重遠小於距離
+        upright_score = self.upright_frames * 0.1 * FITNESS_UPRIGHT_WEIGHT
 
-        # 計算基礎指標
-        if self.update_count > 0:
-            avg_height = self.height_sum / self.update_count
-            height_ratio = min(1.0, max(0, avg_height / EXPECTED_STANDING_HEIGHT))
-
-            avg_stability = self.stability_sum / self.update_count
-
-            upright_ratio = self.upright_frames / self.update_count
-        else:
-            height_ratio = 0
-            avg_stability = 0
-            upright_ratio = 0
-
-        # 【改進】乘法綁定：距離分數 × 直立指標
-        # 這樣「往前倒」就拿不到分了
-        base_distance = max(0, self.upright_distance)
-
-        # 綜合直立係數（高度 × 穩定性）
-        upright_multiplier = (height_ratio ** 2) * (avg_stability ** 2)
-
-        # 距離分數 = 直立時累積的距離 × 直立係數
-        distance_score = base_distance * upright_multiplier * FITNESS_DISTANCE_WEIGHT
-
-        # 直立時間獎勵
-        upright_bonus = upright_ratio * 50 * FITNESS_UPRIGHT_WEIGHT
-
-        # 存活時間獎勵（降低權重）
-        survival_score = self.time_alive * 5 * FITNESS_SURVIVAL_WEIGHT
-
-        # 【新增】能量懲罰（防止抽搐）
-        if self.update_count > 0:
+        # 3. 摔倒懲罰
+        # 如果最終是摔倒狀態，扣除固定分數
+        fall_penalty = FITNESS_FALL_PENALTY if self.fell_down else 0.0
+        
+        # 4. 能量懲罰
+        # 如果有設定，則扣分
+        energy_penalty = 0.0
+        if FITNESS_ENERGY_PENALTY > 0 and self.update_count > 0:
             avg_energy = self.energy_used / self.update_count
             energy_penalty = avg_energy * FITNESS_ENERGY_PENALTY
-        else:
-            energy_penalty = 0
 
-        # 摔倒懲罰（大幅提高）
-        fall_penalty = FITNESS_FALL_PENALTY if self.fell_down else 0
-
-        # 綜合適應度
-        self.fitness = distance_score + upright_bonus + survival_score - energy_penalty - fall_penalty
+        # 總分
+        self.fitness = distance_score + upright_score - fall_penalty - energy_penalty
+        
+        # 確保分數不為負（方便後續選擇算法處理）
+        if self.fitness < 0:
+            self.fitness = 0.0
 
     def check_death(self, ground_y: float) -> bool:
         if not self.is_alive:
@@ -410,12 +426,4 @@ class Creature:
         return self.bodies
 
     def get_body_info(self) -> dict:
-        return {
-            'torso': (self.torso_body, self.torso_shape),
-            'left_thigh': (self.left_thigh_body, self.left_thigh_shape),
-            'left_shin': (self.left_shin_body, self.left_shin_shape),
-            'left_foot': (self.left_foot_body, self.left_foot_shape),
-            'right_thigh': (self.right_thigh_body, self.right_thigh_shape),
-            'right_shin': (self.right_shin_body, self.right_shin_shape),
-            'right_foot': (self.right_foot_body, self.right_foot_shape),
-        }
+        return self.named_parts

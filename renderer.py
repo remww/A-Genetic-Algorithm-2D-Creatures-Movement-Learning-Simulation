@@ -147,7 +147,7 @@ class Renderer:
     def _draw_creature(self, creature, grid_x: int, grid_y: int, camera_x: float):
         """
         繪製生物
-
+        
         Args:
             creature: 生物物件
             grid_x: Grid 左上角 X
@@ -156,24 +156,23 @@ class Renderer:
         """
         body_info = creature.get_body_info()
 
-        # 決定顏色（死亡時變灰）
-        if creature.is_alive:
-            colors = {
-                'torso': COLOR_TORSO,
-                'left_thigh': COLOR_THIGH,
-                'left_shin': COLOR_SHIN,
-                'left_foot': COLOR_FOOT,
-                'right_thigh': COLOR_THIGH,
-                'right_shin': COLOR_SHIN,
-                'right_foot': COLOR_FOOT,
-            }
-        else:
-            colors = {key: COLOR_DEAD for key in body_info.keys()}
-
         # 繪製每個身體部件
         for part_name, (body, shape) in body_info.items():
-            self._draw_body_part(body, shape, colors[part_name],
-                                grid_x, grid_y, camera_x)
+            # 決定顏色
+            if not creature.is_alive:
+                color = COLOR_DEAD
+            elif 'torso' in part_name:
+                color = COLOR_TORSO
+            elif 'thigh' in part_name:
+                color = COLOR_THIGH
+            elif 'shin' in part_name:
+                color = COLOR_SHIN
+            elif 'foot' in part_name:
+                color = COLOR_FOOT
+            else:
+                color = (200, 200, 200) # 預設顏色
+
+            self._draw_body_part(body, shape, color, grid_x, grid_y, camera_x)
 
     def _draw_body_part(self, body, shape, color: tuple,
                         grid_x: int, grid_y: int, camera_x: float):
