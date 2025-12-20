@@ -26,7 +26,7 @@ GROUND_FRICTION = 1.0
 GROUND_HEIGHT = 50
 
 # ==================== 生物類型設定 ====================
-CREATURE_TYPE = 'BIPED'  # 選項: 'BIPED' (雙足) 或 'QUADRUPED' (四足)
+CREATURE_TYPE = 'QUADRUPED'  # 選項: 'BIPED' (雙足) 或 'QUADRUPED' (四足)
 
 # ==================== 生物結構設定 ====================
 if CREATURE_TYPE == 'QUADRUPED':
@@ -34,7 +34,9 @@ if CREATURE_TYPE == 'QUADRUPED':
     TORSO_HEIGHT = 20              # 稍微變扁
     TORSO_MASS = 8                 # 增加質量
     MOTOR_COUNT = 8                # 8 個馬達 (4 條腿 x 2 關節)
-    
+    # 2D 側視無法表現左右兩側，這裡用 X 軸微小錯開避免腿完全重疊
+    QUADRUPED_LEG_X_OFFSET = 8
+
     # 四足關節設定
     HIP_MIN_ANGLE = -1.2
     HIP_MAX_ANGLE = 1.2
@@ -46,6 +48,7 @@ else:  # BIPED
     TORSO_HEIGHT = 30
     TORSO_MASS = 6
     MOTOR_COUNT = 4                # 4 個馬達 (2 條腿 x 2 關節)
+    QUADRUPED_LEG_X_OFFSET = 0
 
     # 雙足關節設定
     HIP_MIN_ANGLE = -0.8
@@ -111,7 +114,9 @@ UPRIGHT_ANGLE_THRESHOLD = 0.35
 FITNESS_DISTANCE_WEIGHT = 5.0      # 距離權重 (主要分數來源)
 FITNESS_UPRIGHT_WEIGHT = 0.1       # 直立時間權重 (僅作為微小獎勵，避免為了直立不敢動)
 FITNESS_SURVIVAL_WEIGHT = 0.0      # 存活時間權重 (移除，避免生物學會龜縮不動)
-FITNESS_ENERGY_PENALTY = 0.0       # 能量懲罰 (移除，初期允許高能耗的動作)
+# 事件 shaping：鼓勵出現「交替踏步」而不是敲地/拖行
+FITNESS_STEP_REWARD = 20.0         # 每次踏步事件的獎勵（小於距離主項，避免原地踏步拿分）
+STEP_MIN_LEG_DELTA = 12.0          # 腳前後差距門檻（像素），避免抖動造成的假踏步
 
 # ==================== 控制器設定（新增）====================
 SHARED_FREQUENCY = True            # 是否強制所有馬達使用相同頻率 (協調性)

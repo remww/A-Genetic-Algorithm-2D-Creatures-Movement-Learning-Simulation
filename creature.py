@@ -14,10 +14,10 @@ class Creature:
     """
     生物類別 (四足版本)
 
-    身體結構：
-        [       軀幹 (水平)       ]
-        /      \        /      \
-    [後左腿] [後右腿] [前左腿] [前右腿]
+        身體結構：
+            [       軀幹 (水平)       ]
+            /      \\        /      \\
+        [後左腿] [後右腿] [前左腿] [前右腿]
 
     8 個馬達：
     - 0, 1: 後左 (髖, 膝)
@@ -56,6 +56,9 @@ class Creature:
         self.last_x = start_x
         self.energy_used = 0.0
         self.upright_frames = 0
+        # 踏步事件追蹤（用於抑制敲地/拖行的投機步態）
+        self.step_count = 0
+        self._last_leg_delta_sign = {}
 
         # 身體部件字典 (用於渲染)
         self.named_parts = {}
@@ -175,7 +178,8 @@ class Creature:
         unique_group = self.creature_id + 1
 
         # 1. 軀幹 (水平長方形)
-        torso_y = y + TORSO_HEIGHT / 2 + THIGH_LENGTH + SHIN_LENGTH # 確保起始高度足夠
+        # start_y 在 main.py 已經是「髖關節高度」，四足不需要再額外加腿長，否則會變成出生自由落體
+        torso_y = y + TORSO_HEIGHT / 2
         self.torso_body, self.torso_shape = self._create_box_body(
             x, torso_y, TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS, group=unique_group
         )
@@ -191,12 +195,16 @@ class Creature:
 
         # 2. 後腿 (Back Legs)
         # 關鍵：所有腿使用相同的 unique_group，這樣它們重疊時不會爆炸
-        self._create_leg(back_hip_x, hip_y, group=unique_group, motor_start_index=0, prefix="back_left")
-        self._create_leg(back_hip_x, hip_y, group=unique_group, motor_start_index=2, prefix="back_right")
+        back_left_hip_x = back_hip_x - QUADRUPED_LEG_X_OFFSET
+        back_right_hip_x = back_hip_x + QUADRUPED_LEG_X_OFFSET
+        self._create_leg(back_left_hip_x, hip_y, group=unique_group, motor_start_index=0, prefix="back_left")
+        self._create_leg(back_right_hip_x, hip_y, group=unique_group, motor_start_index=2, prefix="back_right")
 
         # 3. 前腿 (Front Legs)
-        self._create_leg(front_hip_x, hip_y, group=unique_group, motor_start_index=4, prefix="front_left")
-        self._create_leg(front_hip_x, hip_y, group=unique_group, motor_start_index=6, prefix="front_right")
+        front_left_hip_x = front_hip_x - QUADRUPED_LEG_X_OFFSET
+        front_right_hip_x = front_hip_x + QUADRUPED_LEG_X_OFFSET
+        self._create_leg(front_left_hip_x, hip_y, group=unique_group, motor_start_index=4, prefix="front_left")
+        self._create_leg(front_right_hip_x, hip_y, group=unique_group, motor_start_index=6, prefix="front_right")
 
 
     def _create_motor_joint(self, body_a: pymunk.Body, body_b: pymunk.Body,
@@ -259,6 +267,43 @@ class Creature:
 
         return hip_correction, knee_correction
 
+    def _update_step_counter(self, dx: float, is_upright: bool):
+        """
+        追蹤「踏步事件」：當一對腳的前後關係翻轉（且差距夠大）時，視為一次踏步。
+
+        目的：在不改控制器/演化框架的前提下，讓 GA 更傾向收斂到交替步態，而不是敲地拖行。
+        """
+        if CREATURE_TYPE == 'QUADRUPED':
+            pairs = [
+                ("front", "front_left_foot", "front_right_foot"),
+                ("back", "back_left_foot", "back_right_foot"),
+            ]
+        else:
+            pairs = [("biped", "left_foot", "right_foot")]
+
+        for key, left_name, right_name in pairs:
+            left_part = self.named_parts.get(left_name)
+            right_part = self.named_parts.get(right_name)
+            if not left_part or not right_part:
+                continue
+
+            left_body, _ = left_part
+            right_body, _ = right_part
+
+            leg_delta = right_body.position.x - left_body.position.x
+            if abs(leg_delta) < STEP_MIN_LEG_DELTA:
+                continue
+
+            sign = 1 if leg_delta > 0 else -1
+            last_sign = self._last_leg_delta_sign.get(key)
+            self._last_leg_delta_sign[key] = sign
+
+            if last_sign is None:
+                continue
+
+            if sign != last_sign and is_upright and dx > 0:
+                self.step_count += 1
+
     def update(self, dt: float, current_time: float):
         if not self.is_alive:
             return
@@ -320,10 +365,13 @@ class Creature:
         current_x = self.torso_body.position.x
         dx = current_x - self.last_x
 
-        if self._is_upright():
+        is_upright = self._is_upright()
+        if is_upright:
             self.upright_frames += 1
             if dx > 0:
                 self.upright_distance += dx
+
+        self._update_step_counter(dx, is_upright)
 
         self.last_x = current_x
 
@@ -341,6 +389,9 @@ class Creature:
         # 給予微小獎勵，鼓勵站著，但權重遠小於距離
         upright_score = self.upright_frames * 0.1 * FITNESS_UPRIGHT_WEIGHT
 
+        # 2.5 踏步事件獎勵（形狀化，避免敲地/拖行）
+        step_score = self.step_count * FITNESS_STEP_REWARD
+
         # 3. 摔倒懲罰
         # 如果最終是摔倒狀態，扣除固定分數
         fall_penalty = FITNESS_FALL_PENALTY if self.fell_down else 0.0
@@ -353,7 +404,7 @@ class Creature:
             energy_penalty = avg_energy * FITNESS_ENERGY_PENALTY
 
         # 總分
-        self.fitness = distance_score + upright_score - fall_penalty - energy_penalty
+        self.fitness = distance_score + upright_score + step_score - fall_penalty - energy_penalty
         
         # 確保分數不為負（方便後續選擇算法處理）
         if self.fitness < 0:
