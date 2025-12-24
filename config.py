@@ -1,14 +1,9 @@
-"""
-步履蹣跚：基於物理引擎的 2D 生物行走演化
-參數設定檔（第一階段改進版本）
-"""
-
 # ==================== 視窗設定 ====================
 WINDOW_WIDTH = 1600
 WINDOW_HEIGHT = 900
 FPS = 60
 
-# Grid 佈局 (2行 x 5列 = 10個格子)
+# Grid 佈局 
 GRID_ROWS = 2
 GRID_COLS = 5
 GRID_COUNT = GRID_ROWS * GRID_COLS
@@ -26,15 +21,14 @@ GROUND_FRICTION = 1.0
 GROUND_HEIGHT = 50
 
 # ==================== 生物類型設定 ====================
-CREATURE_TYPE = 'QUADRUPED'  # 選項: 'BIPED' (雙足) 或 'QUADRUPED' (四足)
+CREATURE_TYPE = 'QUADRUPED'  # 'BIPED' (雙足) 或 'QUADRUPED' (四足)
 
 # ==================== 生物結構設定 ====================
 if CREATURE_TYPE == 'QUADRUPED':
-    TORSO_WIDTH = 100              # 拉長軀幹
-    TORSO_HEIGHT = 20              # 稍微變扁
-    TORSO_MASS = 8                 # 增加質量
-    MOTOR_COUNT = 8                # 8 個馬達 (4 條腿 x 2 關節)
-    # 2D 側視無法表現左右兩側，這裡用 X 軸微小錯開避免腿完全重疊
+    TORSO_WIDTH = 100              # 軀幹
+    TORSO_HEIGHT = 20              
+    TORSO_MASS = 8                 # 質量
+    MOTOR_COUNT = 8                # 馬達 
     QUADRUPED_LEG_X_OFFSET = 8
 
     # 四足關節設定
@@ -72,7 +66,7 @@ FOOT_FRICTION = 2.0
 BODY_FRICTION = 0.3
 
 # ==================== 關節設定 (共用) ====================
-MOTOR_MAX_FORCE = 400000       # 降低最大力矩，防止物理爆炸 (原 800000)
+MOTOR_MAX_FORCE = 400000
 
 # ==================== 基因設定 ====================
 GENES_PER_MOTOR = 3
@@ -86,44 +80,44 @@ PHASE_MIN = 0.0
 PHASE_MAX = 6.28318  # 2π
 
 # ==================== 演化設定 ====================
-POPULATION_SIZE = 50           # 增加到 50（更多多樣性）
-SIMULATION_TIME = 15.0         # 縮短到 15 秒（加快迭代）
+POPULATION_SIZE = 15           
+SIMULATION_TIME = 15.0         
 ELITE_RATIO = 0.1
 CROSSOVER_RATE = 0.8
-MUTATION_RATE = 0.25           # 提高到 25%（原 15%）
-MUTATION_STRENGTH = 0.25       # 提高到 0.25（原 0.15）
+MUTATION_RATE = 0.2           
+MUTATION_STRENGTH = 0.2       
 
-# 選擇策略設定
+# 選擇策略
 SELECTION_METHOD = 'tournament'  # 'roulette' 或 'tournament'
-TOURNAMENT_SIZE = 3              # 錦標賽大小（每次隨機選幾個比較）
+TOURNAMENT_SIZE = 3              # 競賽大小
 
-# 自適應突變設定（維持多樣性）
-ADAPTIVE_MUTATION = True                # 啟用自適應突變
-MUTATION_RATE_MAX = 0.5                 # 最大突變率（多樣性低時）
-MUTATION_STRENGTH_MAX = 0.4             # 最大突變強度
-DIVERSITY_THRESHOLD = 0.1               # 多樣性閾值（低於此值時提高突變）
+# 自適應突變設定（用以維持多樣性）
+ADAPTIVE_MUTATION = True                
+MUTATION_RATE_MAX = 0.5                 
+MUTATION_STRENGTH_MAX = 0.4             
+DIVERSITY_THRESHOLD = 0.1               # 多樣性閾值
 
-# ==================== 直立判定設定（新增）====================
-# 直立高度閾值：軀幹高度必須高於此值才算直立
+# ==================== 直立判定設定 ====================
+# 軀幹高度必須高於此值才算直立
 UPRIGHT_HEIGHT_THRESHOLD = 50
-# 直立角度閾值：軀幹角度必須小於此值才算直立（約 20 度）
+# 軀幹角度必須小於此值才算直立
 UPRIGHT_ANGLE_THRESHOLD = 0.35
 
-# ==================== 適應度設定（改進版）====================
-# 新公式：大幅簡化，以距離為絕對核心
-FITNESS_DISTANCE_WEIGHT = 5.0      # 距離權重 (主要分數來源)
-FITNESS_UPRIGHT_WEIGHT = 0.1       # 直立時間權重 (僅作為微小獎勵，避免為了直立不敢動)
-FITNESS_SURVIVAL_WEIGHT = 0.0      # 存活時間權重 (移除，避免生物學會龜縮不動)
-# 事件 shaping：鼓勵出現「交替踏步」而不是敲地/拖行
-FITNESS_STEP_REWARD = 20.0         # 每次踏步事件的獎勵（小於距離主項，避免原地踏步拿分）
-STEP_MIN_LEG_DELTA = 12.0          # 腳前後差距門檻（像素），避免抖動造成的假踏步
+# ==================== 適應度設定 ====================
+# 以距離為核心
+FITNESS_DISTANCE_WEIGHT = 5.0      # 距離權重
+FITNESS_UPRIGHT_WEIGHT = 0.1       # 直立時間權重
+FITNESS_SURVIVAL_WEIGHT = 0.0      # 存活時間權重
+# 獎勵出現交替踏步（更像走路）
+FITNESS_STEP_REWARD = 50.0         # 每次踏步事件的獎勵
+STEP_MIN_LEG_DELTA = 15.0          # 腳前後差距門檻
 
-# ==================== 控制器設定（新增）====================
-SHARED_FREQUENCY = True            # 是否強制所有馬達使用相同頻率 (協調性)
+# ==================== 控制器設定 ====================
+SHARED_FREQUENCY = True            
 
 # 懲罰設定
-FITNESS_FALL_PENALTY = 200.0       # 摔倒懲罰（大幅提高！）
-FITNESS_ENERGY_PENALTY = 0.01      # 能量懲罰（新增，防止抽搐）
+FITNESS_FALL_PENALTY = 200.0       # 摔倒懲罰
+FITNESS_ENERGY_PENALTY = 0.01      # 能量懲罰
 
 # 預期站立高度
 EXPECTED_STANDING_HEIGHT = THIGH_LENGTH + SHIN_LENGTH + FOOT_HEIGHT + TORSO_HEIGHT / 2
@@ -153,8 +147,8 @@ RECORDING_FPS = 30
 RECORDING_FILENAME = "evolution_recording.mp4"
 
 # ==================== 反射機制設定 ====================
-# 平衡反射：當軀幹傾斜時，調整髖關節輸出
+# 當軀幹傾斜時，調整髖關節輸出
 REFLEX_ENABLED = True
-REFLEX_BALANCE_GAIN = 1.0          # 降低反射增益 (四足有4個髖，總力矩較大)
-REFLEX_BALANCE_THRESHOLD = 0.15   # 觸發平衡反射的角度閾值（弧度，約 8.6 度）
-REFLEX_VELOCITY_GAIN = 0.5        # 角速度反射增益（防止過度擺動）
+REFLEX_BALANCE_GAIN = 1.0          
+REFLEX_BALANCE_THRESHOLD = 0.15   # 觸發平衡反射的角度閾值
+REFLEX_VELOCITY_GAIN = 0.5        

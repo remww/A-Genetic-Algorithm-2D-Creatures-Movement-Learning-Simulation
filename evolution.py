@@ -1,38 +1,20 @@
-"""
-步履蹣跚：基於物理引擎的 2D 生物行走演化
-遺傳演算法模組
-"""
-
 import random
 from config import *
 
 
 class GeneticAlgorithm:
-    """
-    遺傳演算法
-
-    選擇策略：菁英保留 + 錦標賽選擇（可切換為輪盤選擇）
-    交叉方式：單點交叉
-    突變方式：高斯突變
-    """
-
     def __init__(self):
         self.generation = 0
         self.best_fitness_history = []
         self.avg_fitness_history = []
         self.diversity_history = []
 
-        # 自適應突變參數（會根據多樣性動態調整）
+        # 自適應突變參數
         self.current_mutation_rate = MUTATION_RATE
         self.current_mutation_strength = MUTATION_STRENGTH
 
     def create_initial_population(self) -> list:
-        """
-        創建初始族群
-
-        Returns:
-            基因列表的列表
-        """
+        # 創建初始族群
         population = []
         for _ in range(POPULATION_SIZE):
             genes = self._random_genes()
@@ -40,28 +22,19 @@ class GeneticAlgorithm:
         return population
 
     def _random_genes(self) -> list:
-        """生成隨機基因"""
+        # 生成隨機基因
         genes = []
         for _ in range(MOTOR_COUNT):
-            # 振幅 A
+            # 振幅
             genes.append(random.uniform(AMPLITUDE_MIN, AMPLITUDE_MAX))
-            # 頻率 ω
+            # 頻率
             genes.append(random.uniform(FREQUENCY_MIN, FREQUENCY_MAX))
-            # 相位 φ
+            # 相位
             genes.append(random.uniform(PHASE_MIN, PHASE_MAX))
         return genes
 
     def evolve(self, population: list, fitness_scores: list) -> list:
-        """
-        執行一次演化
-
-        Args:
-            population: 當前族群的基因列表
-            fitness_scores: 對應的適應度分數
-
-        Returns:
-            新一代族群的基因列表
-        """
+        # 執行一次演化
         self.generation += 1
 
         # 記錄統計資料
@@ -70,7 +43,7 @@ class GeneticAlgorithm:
         self.best_fitness_history.append(best_fitness)
         self.avg_fitness_history.append(avg_fitness)
 
-        # 計算並記錄多樣性，更新自適應突變參數
+        # 計算並記錄多樣性且更新自適應突變參數
         diversity = self._calculate_diversity(population)
         self.diversity_history.append(diversity)
         self._update_adaptive_mutation(diversity)
@@ -82,14 +55,14 @@ class GeneticAlgorithm:
 
         new_population = []
 
-        # 1. 菁英保留：保留前 ELITE_RATIO 的個體
+        # 菁英保留
         elite_count = max(1, int(POPULATION_SIZE * ELITE_RATIO))
         for i in range(elite_count):
             new_population.append(sorted_population[i].copy())
 
-        # 2. 產生剩餘的個體（透過選擇、交叉、突變）
+        # 產生剩餘的個體
         while len(new_population) < POPULATION_SIZE:
-            # 選擇兩個親代（根據設定使用不同選擇策略）
+            # 選擇父母
             parent1 = self._select_parent(sorted_population, sorted_fitness)
             parent2 = self._select_parent(sorted_population, sorted_fitness)
 
@@ -110,18 +83,7 @@ class GeneticAlgorithm:
         return new_population
 
     def _tournament_selection(self, population: list, fitness_scores: list) -> list:
-        """
-        錦標賽選擇
-
-        隨機選取 TOURNAMENT_SIZE 個個體，選擇其中適應度最高的
-
-        Args:
-            population: 族群
-            fitness_scores: 適應度分數
-
-        Returns:
-            選中的個體基因
-        """
+        # 錦標賽選擇
         # 隨機選取參賽者
         indices = random.sample(range(len(population)), min(TOURNAMENT_SIZE, len(population)))
 
@@ -131,33 +93,15 @@ class GeneticAlgorithm:
         return population[winner_idx].copy()
 
     def _select_parent(self, population: list, fitness_scores: list) -> list:
-        """
-        根據設定選擇親代
-
-        Args:
-            population: 族群
-            fitness_scores: 適應度分數
-
-        Returns:
-            選中的個體基因
-        """
+        # 根據設定選擇父母
         if SELECTION_METHOD == 'tournament':
             return self._tournament_selection(population, fitness_scores)
         else:
             return self._roulette_selection(population, fitness_scores)
 
     def _roulette_selection(self, population: list, fitness_scores: list) -> list:
-        """
-        輪盤選擇
-
-        Args:
-            population: 族群
-            fitness_scores: 適應度分數（已排序）
-
-        Returns:
-            選中的個體基因
-        """
-        # 將適應度轉換為正數（加上偏移量）
+        # 輪盤選擇
+        # 將適應度轉換為正數
         min_fitness = min(fitness_scores)
         adjusted_fitness = [f - min_fitness + 1 for f in fitness_scores]
 
@@ -176,17 +120,7 @@ class GeneticAlgorithm:
         return population[-1].copy()
 
     def _calculate_diversity(self, population: list) -> float:
-        """
-        計算族群多樣性（基因變異程度）
-
-        使用所有基因的標準差平均值來衡量多樣性
-
-        Args:
-            population: 族群基因列表
-
-        Returns:
-            多樣性指數（0~1，越高越多樣）
-        """
+        # 計算族群多樣性
         if len(population) < 2:
             return 1.0
 
@@ -202,7 +136,7 @@ class GeneticAlgorithm:
             variance = sum((v - mean) ** 2 for v in gene_values) / len(gene_values)
             std_dev = variance ** 0.5
 
-            # 根據基因類型正規化（除以該基因的範圍）
+            # 根據基因類型正規化
             gene_type = gene_idx % GENES_PER_MOTOR
             if gene_type == 0:  # 振幅
                 gene_range = AMPLITUDE_MAX - AMPLITUDE_MIN
@@ -217,23 +151,15 @@ class GeneticAlgorithm:
         # 平均多樣性
         diversity = total_variance / gene_count
 
-        return min(1.0, diversity)  # 限制在 0~1
+        return min(1.0, diversity)
 
     def _update_adaptive_mutation(self, diversity: float):
-        """
-        根據多樣性調整突變參數
-
-        當多樣性低時，提高突變率和強度以增加探索
-
-        Args:
-            diversity: 當前多樣性指數
-        """
+        # 根據多樣性調整突變參數
         if not ADAPTIVE_MUTATION:
             return
 
         if diversity < DIVERSITY_THRESHOLD:
             # 多樣性低，提高突變
-            # 使用線性插值：多樣性越低，突變越高
             ratio = 1.0 - (diversity / DIVERSITY_THRESHOLD)
 
             self.current_mutation_rate = MUTATION_RATE + ratio * (MUTATION_RATE_MAX - MUTATION_RATE)
@@ -244,17 +170,7 @@ class GeneticAlgorithm:
             self.current_mutation_strength = MUTATION_STRENGTH
 
     def _crossover(self, parent1: list, parent2: list) -> tuple:
-        """
-        單點交叉
-
-        Args:
-            parent1: 親代 1
-            parent2: 親代 2
-
-        Returns:
-            (child1, child2) 子代元組
-        """
-        # 選擇交叉點（以馬達為單位，每個馬達 3 個基因）
+        # 單點交叉 (混合)
         crossover_point = random.randint(1, MOTOR_COUNT - 1) * GENES_PER_MOTOR
 
         child1 = parent1[:crossover_point] + parent2[crossover_point:]
@@ -263,15 +179,7 @@ class GeneticAlgorithm:
         return child1, child2
 
     def _mutate(self, genes: list) -> list:
-        """
-        高斯突變（改進版：自適應突變率 + 相位 wrap）
-
-        Args:
-            genes: 基因列表
-
-        Returns:
-            突變後的基因列表
-        """
+        # 高斯突變
         mutated = genes.copy()
 
         # 使用自適應的突變參數
@@ -288,19 +196,15 @@ class GeneticAlgorithm:
                 elif gene_type == 1:  # 頻率
                     mutation = random.gauss(0, mutation_strength * (FREQUENCY_MAX - FREQUENCY_MIN))
                     mutated[i] = max(FREQUENCY_MIN, min(FREQUENCY_MAX, mutated[i] + mutation))
-                else:  # 相位（使用 wrap 而非 clamp，避免邊界堆積）
+                else:  # 相位
                     mutation = random.gauss(0, mutation_strength * (PHASE_MAX - PHASE_MIN))
                     mutated[i] = (mutated[i] + mutation) % PHASE_MAX  # wrap around
 
         return mutated
 
     def get_statistics(self) -> dict:
-        """
-        獲取演化統計資料
+        # 獲取演化統計資料
 
-        Returns:
-            統計資料字典
-        """
         return {
             'generation': self.generation,
             'best_fitness_history': self.best_fitness_history,
