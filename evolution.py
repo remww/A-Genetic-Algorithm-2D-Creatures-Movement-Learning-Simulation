@@ -1,5 +1,5 @@
 import random
-from config import *
+import config
 
 
 class GeneticAlgorithm:
@@ -10,13 +10,13 @@ class GeneticAlgorithm:
         self.diversity_history = []
 
         # 自適應突變參數
-        self.current_mutation_rate = MUTATION_RATE
-        self.current_mutation_strength = MUTATION_STRENGTH
+        self.current_mutation_rate = config.MUTATION_RATE
+        self.current_mutation_strength = config.MUTATION_STRENGTH
 
     def create_initial_population(self) -> list:
         # 創建初始族群
         population = []
-        for _ in range(POPULATION_SIZE):
+        for _ in range(config.POPULATION_SIZE):
             genes = self._random_genes()
             population.append(genes)
         return population
@@ -24,13 +24,13 @@ class GeneticAlgorithm:
     def _random_genes(self) -> list:
         # 生成隨機基因
         genes = []
-        for _ in range(MOTOR_COUNT):
+        for _ in range(config.MOTOR_COUNT):
             # 振幅
-            genes.append(random.uniform(AMPLITUDE_MIN, AMPLITUDE_MAX))
+            genes.append(random.uniform(config.AMPLITUDE_MIN, config.AMPLITUDE_MAX))
             # 頻率
-            genes.append(random.uniform(FREQUENCY_MIN, FREQUENCY_MAX))
+            genes.append(random.uniform(config.FREQUENCY_MIN, config.FREQUENCY_MAX))
             # 相位
-            genes.append(random.uniform(PHASE_MIN, PHASE_MAX))
+            genes.append(random.uniform(config.PHASE_MIN, config.PHASE_MAX))
         return genes
 
     def evolve(self, population: list, fitness_scores: list) -> list:
@@ -56,18 +56,18 @@ class GeneticAlgorithm:
         new_population = []
 
         # 菁英保留
-        elite_count = max(1, int(POPULATION_SIZE * ELITE_RATIO))
+        elite_count = max(1, int(config.POPULATION_SIZE * config.ELITE_RATIO))
         for i in range(elite_count):
             new_population.append(sorted_population[i].copy())
 
         # 產生剩餘的個體
-        while len(new_population) < POPULATION_SIZE:
+        while len(new_population) < config.POPULATION_SIZE:
             # 選擇父母
             parent1 = self._select_parent(sorted_population, sorted_fitness)
             parent2 = self._select_parent(sorted_population, sorted_fitness)
 
             # 交叉
-            if random.random() < CROSSOVER_RATE:
+            if random.random() < config.CROSSOVER_RATE:
                 child1, child2 = self._crossover(parent1, parent2)
             else:
                 child1, child2 = parent1.copy(), parent2.copy()
@@ -77,7 +77,7 @@ class GeneticAlgorithm:
             child2 = self._mutate(child2)
 
             new_population.append(child1)
-            if len(new_population) < POPULATION_SIZE:
+            if len(new_population) < config.POPULATION_SIZE:
                 new_population.append(child2)
 
         return new_population
@@ -85,7 +85,7 @@ class GeneticAlgorithm:
     def _tournament_selection(self, population: list, fitness_scores: list) -> list:
         # 錦標賽選擇
         # 隨機選取參賽者
-        indices = random.sample(range(len(population)), min(TOURNAMENT_SIZE, len(population)))
+        indices = random.sample(range(len(population)), min(config.TOURNAMENT_SIZE, len(population)))
 
         # 找出適應度最高的
         winner_idx = max(indices, key=lambda i: fitness_scores[i])
@@ -94,7 +94,7 @@ class GeneticAlgorithm:
 
     def _select_parent(self, population: list, fitness_scores: list) -> list:
         # 根據設定選擇父母
-        if SELECTION_METHOD == 'tournament':
+        if config.SELECTION_METHOD == 'tournament':
             return self._tournament_selection(population, fitness_scores)
         else:
             return self._roulette_selection(population, fitness_scores)
@@ -137,13 +137,13 @@ class GeneticAlgorithm:
             std_dev = variance ** 0.5
 
             # 根據基因類型正規化
-            gene_type = gene_idx % GENES_PER_MOTOR
+            gene_type = gene_idx % config.GENES_PER_MOTOR
             if gene_type == 0:  # 振幅
-                gene_range = AMPLITUDE_MAX - AMPLITUDE_MIN
+                gene_range = config.AMPLITUDE_MAX - config.AMPLITUDE_MIN
             elif gene_type == 1:  # 頻率
-                gene_range = FREQUENCY_MAX - FREQUENCY_MIN
+                gene_range = config.FREQUENCY_MAX - config.FREQUENCY_MIN
             else:  # 相位
-                gene_range = PHASE_MAX - PHASE_MIN
+                gene_range = config.PHASE_MAX - config.PHASE_MIN
 
             normalized_std = std_dev / gene_range if gene_range > 0 else 0
             total_variance += normalized_std
@@ -155,23 +155,23 @@ class GeneticAlgorithm:
 
     def _update_adaptive_mutation(self, diversity: float):
         # 根據多樣性調整突變參數
-        if not ADAPTIVE_MUTATION:
+        if not config.ADAPTIVE_MUTATION:
             return
 
-        if diversity < DIVERSITY_THRESHOLD:
+        if diversity < config.DIVERSITY_THRESHOLD:
             # 多樣性低，提高突變
-            ratio = 1.0 - (diversity / DIVERSITY_THRESHOLD)
+            ratio = 1.0 - (diversity / config.DIVERSITY_THRESHOLD)
 
-            self.current_mutation_rate = MUTATION_RATE + ratio * (MUTATION_RATE_MAX - MUTATION_RATE)
-            self.current_mutation_strength = MUTATION_STRENGTH + ratio * (MUTATION_STRENGTH_MAX - MUTATION_STRENGTH)
+            self.current_mutation_rate = config.MUTATION_RATE + ratio * (config.MUTATION_RATE_MAX - config.MUTATION_RATE)
+            self.current_mutation_strength = config.MUTATION_STRENGTH + ratio * (config.MUTATION_STRENGTH_MAX - config.MUTATION_STRENGTH)
         else:
             # 多樣性足夠，使用基礎突變率
-            self.current_mutation_rate = MUTATION_RATE
-            self.current_mutation_strength = MUTATION_STRENGTH
+            self.current_mutation_rate = config.MUTATION_RATE
+            self.current_mutation_strength = config.MUTATION_STRENGTH
 
     def _crossover(self, parent1: list, parent2: list) -> tuple:
         # 單點交叉 (混合)
-        crossover_point = random.randint(1, MOTOR_COUNT - 1) * GENES_PER_MOTOR
+        crossover_point = random.randint(1, config.MOTOR_COUNT - 1) * config.GENES_PER_MOTOR
 
         child1 = parent1[:crossover_point] + parent2[crossover_point:]
         child2 = parent2[:crossover_point] + parent1[crossover_point:]
@@ -188,17 +188,17 @@ class GeneticAlgorithm:
 
         for i in range(len(mutated)):
             if random.random() < mutation_rate:
-                gene_type = i % GENES_PER_MOTOR
+                gene_type = i % config.GENES_PER_MOTOR
 
                 if gene_type == 0:  # 振幅
-                    mutation = random.gauss(0, mutation_strength * (AMPLITUDE_MAX - AMPLITUDE_MIN))
-                    mutated[i] = max(AMPLITUDE_MIN, min(AMPLITUDE_MAX, mutated[i] + mutation))
+                    mutation = random.gauss(0, mutation_strength * (config.AMPLITUDE_MAX - config.AMPLITUDE_MIN))
+                    mutated[i] = max(config.AMPLITUDE_MIN, min(config.AMPLITUDE_MAX, mutated[i] + mutation))
                 elif gene_type == 1:  # 頻率
-                    mutation = random.gauss(0, mutation_strength * (FREQUENCY_MAX - FREQUENCY_MIN))
-                    mutated[i] = max(FREQUENCY_MIN, min(FREQUENCY_MAX, mutated[i] + mutation))
+                    mutation = random.gauss(0, mutation_strength * (config.FREQUENCY_MAX - config.FREQUENCY_MIN))
+                    mutated[i] = max(config.FREQUENCY_MIN, min(config.FREQUENCY_MAX, mutated[i] + mutation))
                 else:  # 相位
-                    mutation = random.gauss(0, mutation_strength * (PHASE_MAX - PHASE_MIN))
-                    mutated[i] = (mutated[i] + mutation) % PHASE_MAX  # wrap around
+                    mutation = random.gauss(0, mutation_strength * (config.PHASE_MAX - config.PHASE_MIN))
+                    mutated[i] = (mutated[i] + mutation) % config.PHASE_MAX  # wrap around
 
         return mutated
 

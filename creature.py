@@ -1,7 +1,7 @@
 import math
 import random
 import pymunk
-from config import *
+import config
 
 
 class Creature:
@@ -45,13 +45,16 @@ class Creature:
 
     def _random_genes(self) -> list:
         genes = []
-        for i in range(MOTOR_COUNT):
-            genes.append(random.uniform(AMPLITUDE_MIN, AMPLITUDE_MAX))
-            genes.append(random.uniform(FREQUENCY_MIN, FREQUENCY_MAX))
-            genes.append(random.uniform(PHASE_MIN, PHASE_MAX))
+        for _ in range(config.MOTOR_COUNT):
+            genes.append(random.uniform(config.AMPLITUDE_MIN, config.AMPLITUDE_MAX))
+            genes.append(random.uniform(config.FREQUENCY_MIN, config.FREQUENCY_MAX))
+            genes.append(random.uniform(config.PHASE_MIN, config.PHASE_MAX))
         return genes
 
-    def _create_box_body(self, x: float, y: float, width: float, height: float, mass: float, friction: float = BODY_FRICTION, group: int = 0) -> tuple:
+    def _create_box_body(self, x: float, y: float, width: float, height: float, mass: float, friction: float = None, group: int = 0) -> tuple:
+        if friction is None:
+            friction = config.BODY_FRICTION
+
         moment = pymunk.moment_for_box(mass, (width, height))
         body = pymunk.Body(mass, moment)
         body.position = (x, y)
@@ -70,46 +73,46 @@ class Creature:
 
     def _create_leg(self, hip_x: float, hip_y: float, group: int, motor_start_index: int, prefix: str):
         # 大腿
-        thigh_y = hip_y - THIGH_LENGTH / 2
+        thigh_y = hip_y - config.THIGH_LENGTH / 2
         thigh_body, thigh_shape = self._create_box_body(
-            hip_x, thigh_y, THIGH_WIDTH, THIGH_LENGTH, THIGH_MASS, group=group
+            hip_x, thigh_y, config.THIGH_WIDTH, config.THIGH_LENGTH, config.THIGH_MASS, group=group
         )
         self.named_parts[f"{prefix}_thigh"] = (thigh_body, thigh_shape)
 
         # 小腿
-        shin_y = thigh_y - THIGH_LENGTH / 2 - SHIN_LENGTH / 2
+        shin_y = thigh_y - config.THIGH_LENGTH / 2 - config.SHIN_LENGTH / 2
         shin_body, shin_shape = self._create_box_body(
-            hip_x, shin_y, SHIN_WIDTH, SHIN_LENGTH, SHIN_MASS, group=group
+            hip_x, shin_y, config.SHIN_WIDTH, config.SHIN_LENGTH, config.SHIN_MASS, group=group
         )
         self.named_parts[f"{prefix}_shin"] = (shin_body, shin_shape)
 
         # 腳
-        foot_y = shin_y - SHIN_LENGTH / 2 - FOOT_HEIGHT / 2
+        foot_y = shin_y - config.SHIN_LENGTH / 2 - config.FOOT_HEIGHT / 2
         foot_body, foot_shape = self._create_box_body(
-            hip_x, foot_y, FOOT_WIDTH, FOOT_HEIGHT, FOOT_MASS, FOOT_FRICTION, group=group
+            hip_x, foot_y, config.FOOT_WIDTH, config.FOOT_HEIGHT, config.FOOT_MASS, config.FOOT_FRICTION, group=group
         )
         self.named_parts[f"{prefix}_foot"] = (foot_body, foot_shape)
 
         # 軀幹 -> 大腿 (髖關節)
         self._create_motor_joint(
             self.torso_body, thigh_body,
-            (hip_x, hip_y), HIP_MIN_ANGLE, HIP_MAX_ANGLE, motor_index=motor_start_index
+            (hip_x, hip_y), config.HIP_MIN_ANGLE, config.HIP_MAX_ANGLE, motor_index=motor_start_index
         )
 
         # 大腿 -> 小腿 (膝關節)
         self._create_motor_joint(
             thigh_body, shin_body,
-            (hip_x, thigh_y - THIGH_LENGTH / 2), KNEE_MIN_ANGLE, KNEE_MAX_ANGLE, motor_index=motor_start_index + 1
+            (hip_x, thigh_y - config.THIGH_LENGTH / 2), config.KNEE_MIN_ANGLE, config.KNEE_MAX_ANGLE, motor_index=motor_start_index + 1
         )
 
         # 小腿 -> 腳 (固定)
         self._create_fixed_joint(
-            shin_body, foot_body, (hip_x, shin_y - SHIN_LENGTH / 2)
+            shin_body, foot_body, (hip_x, shin_y - config.SHIN_LENGTH / 2)
         )
 
     def _create_body(self):
         #根據設定選擇建立雙足或四足身體
-        if CREATURE_TYPE == 'QUADRUPED':
+        if config.CREATURE_TYPE == 'QUADRUPED':
             self._create_quadruped_body()
         else:
             self._create_biped_body()
@@ -121,20 +124,20 @@ class Creature:
         unique_group = self.creature_id + 1
 
         # 軀幹
-        torso_y = y + TORSO_HEIGHT / 2
+        torso_y = y + config.TORSO_HEIGHT / 2
         self.torso_body, self.torso_shape = self._create_box_body(
-            x, torso_y, TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS, group=unique_group
+            x, torso_y, config.TORSO_WIDTH, config.TORSO_HEIGHT, config.TORSO_MASS, group=unique_group
         )
         self.torso_shape.collision_type = 2
         self.named_parts['torso'] = (self.torso_body, self.torso_shape)
 
         # 左腿
-        left_hip_x = x - TORSO_WIDTH / 4
-        hip_y = torso_y - TORSO_HEIGHT / 2
+        left_hip_x = x - config.TORSO_WIDTH / 4
+        hip_y = torso_y - config.TORSO_HEIGHT / 2
         self._create_leg(left_hip_x, hip_y, group=unique_group, motor_start_index=0, prefix="left")
 
         # 右腿
-        right_hip_x = x + TORSO_WIDTH / 4
+        right_hip_x = x + config.TORSO_WIDTH / 4
         self._create_leg(right_hip_x, hip_y, group=unique_group, motor_start_index=2, prefix="right")
 
     def _create_quadruped_body(self):
@@ -144,29 +147,29 @@ class Creature:
         unique_group = self.creature_id + 1
 
         # 軀幹
-        torso_y = y + TORSO_HEIGHT / 2
+        torso_y = y + config.TORSO_HEIGHT / 2
         self.torso_body, self.torso_shape = self._create_box_body(
-            x, torso_y, TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS, group=unique_group
+            x, torso_y, config.TORSO_WIDTH, config.TORSO_HEIGHT, config.TORSO_MASS, group=unique_group
         )
         self.torso_shape.collision_type = 2
         self.named_parts['torso'] = (self.torso_body, self.torso_shape)
 
         # 計算前後腿的髖關節位置
-        offset_x = TORSO_WIDTH / 2 - 10 
+        offset_x = config.TORSO_WIDTH / 2 - 10 
         front_hip_x = x + offset_x
         back_hip_x = x - offset_x
-        hip_y = torso_y - TORSO_HEIGHT / 2
+        hip_y = torso_y - config.TORSO_HEIGHT / 2
 
         # 後腿
         # 所有腿使用相同的 unique_group，這樣它們重疊時不會產生爆炸性能量
-        back_left_hip_x = back_hip_x - QUADRUPED_LEG_X_OFFSET
-        back_right_hip_x = back_hip_x + QUADRUPED_LEG_X_OFFSET
+        back_left_hip_x = back_hip_x - config.QUADRUPED_LEG_X_OFFSET
+        back_right_hip_x = back_hip_x + config.QUADRUPED_LEG_X_OFFSET
         self._create_leg(back_left_hip_x, hip_y, group=unique_group, motor_start_index=0, prefix="back_left")
         self._create_leg(back_right_hip_x, hip_y, group=unique_group, motor_start_index=2, prefix="back_right")
 
         # 前腿
-        front_left_hip_x = front_hip_x - QUADRUPED_LEG_X_OFFSET
-        front_right_hip_x = front_hip_x + QUADRUPED_LEG_X_OFFSET
+        front_left_hip_x = front_hip_x - config.QUADRUPED_LEG_X_OFFSET
+        front_right_hip_x = front_hip_x + config.QUADRUPED_LEG_X_OFFSET
         self._create_leg(front_left_hip_x, hip_y, group=unique_group, motor_start_index=4, prefix="front_left")
         self._create_leg(front_right_hip_x, hip_y, group=unique_group, motor_start_index=6, prefix="front_right")
 
@@ -182,7 +185,7 @@ class Creature:
         self.rotary_limit_joints.append(rotary_limit)
 
         motor = pymunk.SimpleMotor(body_a, body_b, 0)
-        motor.max_force = MOTOR_MAX_FORCE
+        motor.max_force = config.MOTOR_MAX_FORCE
         self.space.add(motor)
         self.motors.append(motor)
 
@@ -199,14 +202,14 @@ class Creature:
         # 檢查是否處於直立狀態
         torso_height = self.torso_body.position.y
         torso_angle = abs(self.torso_body.angle)
-        height_ok = torso_height > UPRIGHT_HEIGHT_THRESHOLD
-        angle_ok = torso_angle < UPRIGHT_ANGLE_THRESHOLD
+        height_ok = torso_height > config.UPRIGHT_HEIGHT_THRESHOLD
+        angle_ok = torso_angle < config.UPRIGHT_ANGLE_THRESHOLD
 
         return height_ok and angle_ok
 
     def _calculate_reflex_correction(self) -> tuple:
         # 計算反射修正量
-        if not REFLEX_ENABLED:
+        if not config.REFLEX_ENABLED:
             return 0.0, 0.0
 
         torso_angle = self.torso_body.angle
@@ -214,20 +217,20 @@ class Creature:
         hip_correction = 0.0
         knee_correction = 0.0
 
-        if abs(torso_angle) > REFLEX_BALANCE_THRESHOLD:
-            hip_correction = -torso_angle * REFLEX_BALANCE_GAIN
+        if abs(torso_angle) > config.REFLEX_BALANCE_THRESHOLD:
+            hip_correction = -torso_angle * config.REFLEX_BALANCE_GAIN
             
             # 只有雙足模式下，才讓膝關節參與平衡反射
-            if CREATURE_TYPE == 'BIPED':
-                knee_correction = -torso_angle * REFLEX_BALANCE_GAIN * 0.3
+            if config.CREATURE_TYPE == 'BIPED':
+                knee_correction = -torso_angle * config.REFLEX_BALANCE_GAIN * 0.3
 
-        hip_correction -= torso_angular_velocity * REFLEX_VELOCITY_GAIN
+        hip_correction -= torso_angular_velocity * config.REFLEX_VELOCITY_GAIN
 
         return hip_correction, knee_correction
 
     def _update_step_counter(self, dx: float, is_upright: bool):
         # 追蹤踏步事件：當一對腳的前後關係翻轉時，視為一次踏步。
-        if CREATURE_TYPE == 'QUADRUPED':
+        if config.CREATURE_TYPE == 'QUADRUPED':
             pairs = [
                 ("front", "front_left_foot", "front_right_foot"),
                 ("back", "back_left_foot", "back_right_foot"),
@@ -245,7 +248,7 @@ class Creature:
             right_body, _ = right_part
 
             leg_delta = right_body.position.x - left_body.position.x
-            if abs(leg_delta) < STEP_MIN_LEG_DELTA:
+            if abs(leg_delta) < config.STEP_MIN_LEG_DELTA:
                 continue
 
             sign = 1 if leg_delta > 0 else -1
@@ -266,15 +269,15 @@ class Creature:
         self.update_count += 1
 
         hip_correction, knee_correction = self._calculate_reflex_correction()
-        shared_freq = self.genes[1] if SHARED_FREQUENCY else 0.0
+        shared_freq = self.genes[1] if config.SHARED_FREQUENCY else 0.0
         
         frame_energy = 0.0
 
         for i, motor in enumerate(self.motors):
-            gene_base = i * GENES_PER_MOTOR
+            gene_base = i * config.GENES_PER_MOTOR
             amplitude = self.genes[gene_base]
             
-            if SHARED_FREQUENCY:
+            if config.SHARED_FREQUENCY:
                 frequency = shared_freq
             else:
                 frequency = self.genes[gene_base + 1]
@@ -285,7 +288,7 @@ class Creature:
 
             # 判斷是否為髖關節
             is_hip = False
-            if CREATURE_TYPE == 'QUADRUPED':
+            if config.CREATURE_TYPE == 'QUADRUPED':
                  # 四足: 0, 2, 4, 6 是髖
                  if i % 2 == 0:
                      is_hip = True
@@ -334,22 +337,22 @@ class Creature:
         # 計算綜合適應度
         
         # 距離分數（核心）
-        distance_score = self.upright_distance * FITNESS_DISTANCE_WEIGHT
+        distance_score = self.upright_distance * config.FITNESS_DISTANCE_WEIGHT
         
         # 直立時間獎勵（輔助）
-        upright_score = self.upright_frames * 0.1 * FITNESS_UPRIGHT_WEIGHT
+        upright_score = self.upright_frames * 0.1 * config.FITNESS_UPRIGHT_WEIGHT
 
         # 踏步事件獎勵
-        step_score = self.step_count * FITNESS_STEP_REWARD
+        step_score = self.step_count * config.FITNESS_STEP_REWARD
 
         # 摔倒懲罰
-        fall_penalty = FITNESS_FALL_PENALTY if self.fell_down else 0.0
+        fall_penalty = config.FITNESS_FALL_PENALTY if self.fell_down else 0.0
         
         # 能量懲罰
         energy_penalty = 0.0
-        if FITNESS_ENERGY_PENALTY > 0 and self.update_count > 0:
+        if config.FITNESS_ENERGY_PENALTY > 0 and self.update_count > 0:
             avg_energy = self.energy_used / self.update_count
-            energy_penalty = avg_energy * FITNESS_ENERGY_PENALTY
+            energy_penalty = avg_energy * config.FITNESS_ENERGY_PENALTY
 
         # 總分
         self.fitness = distance_score + upright_score + step_score - fall_penalty - energy_penalty
@@ -362,13 +365,13 @@ class Creature:
         if not self.is_alive:
             return True
 
-        if self.time_alive >= SIMULATION_TIME:
+        if self.time_alive >= config.SIMULATION_TIME:
             self.is_alive = False
             self._calculate_fitness()
             return True
 
-        if TORSO_TOUCH_GROUND_DEATH:
-            torso_bottom = self.torso_body.position.y - TORSO_HEIGHT / 2
+        if config.TORSO_TOUCH_GROUND_DEATH:
+            torso_bottom = self.torso_body.position.y - config.TORSO_HEIGHT / 2
             if torso_bottom <= ground_y + 5:
                 self.is_alive = False
                 self.fell_down = True
@@ -376,14 +379,14 @@ class Creature:
                 return True
 
         torso_angle = abs(self.torso_body.angle)
-        if torso_angle > TORSO_ANGLE_DEATH_THRESHOLD:
+        if torso_angle > config.TORSO_ANGLE_DEATH_THRESHOLD:
             self.is_alive = False
             self.fell_down = True
             self._calculate_fitness()
             return True
 
         torso_height = self.torso_body.position.y
-        if torso_height < TORSO_HEIGHT_DEATH_THRESHOLD:
+        if torso_height < config.TORSO_HEIGHT_DEATH_THRESHOLD:
             self.is_alive = False
             self.fell_down = True
             self._calculate_fitness()

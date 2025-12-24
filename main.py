@@ -1,23 +1,107 @@
 import pygame
 import pymunk
 import sys
-from config import *
+import config
 from creature import Creature
 from evolution import GeneticAlgorithm
 from renderer import Renderer
-from recorder import Recorder
+
+
+def setup_config():
+    print("=" * 60)
+    print("2D 生物行走演化模擬 - 配置設定")
+    print("=" * 60)
+    print()
+
+    use_default = input("是否使用預設設定？(Y/n): ").strip().lower()
+
+    if use_default in ['y', 'yes', '是', '']:
+        print("\n使用預設設定啟動...")
+        print()
+        return
+
+    print("\n請設定以下參數（直接按 Enter 使用預設值）:\n")
+
+    # 生物類型
+    print("1. 生物類型:")
+    print("   [1] 雙足生物 (BIPED) - 類似人類兩條腿")
+    print("   [2] 四足生物 (QUADRUPED) - 類似四足動物 [預設]")
+    creature_choice = input("   請選擇 (1/2): ").strip()
+
+    # 族群大小
+    print(f"\n2. 族群大小 (預設: {config.POPULATION_SIZE}):")
+    print("   建議範圍: 10-30")
+    pop_input = input("   請輸入: ").strip()
+
+    # 突變率
+    print(f"\n3. 突變率 (預設: {config.MUTATION_RATE}):")
+    print("   範圍: 0.0-1.0，數值越高變異越大")
+    mut_rate_input = input("   請輸入: ").strip()
+
+    # 突變強度
+    print(f"\n4. 突變強度 (預設: {config.MUTATION_STRENGTH}):")
+    print("   範圍: 0.0-1.0，數值越高每次變異幅度越大")
+    mut_str_input = input("   請輸入: ").strip()
+
+    # 更新配置
+    if creature_choice == '1':
+        config.set_creature_type('BIPED')
+    elif creature_choice == '2':
+        config.set_creature_type('QUADRUPED')
+
+    if pop_input:
+        try:
+            new_pop = int(pop_input)
+            if 5 <= new_pop <= 50:
+                config.POPULATION_SIZE = new_pop
+            else:
+                print("    族群大小超出範圍，使用預設值")
+        except ValueError:
+            print("    輸入無效，使用預設值")
+
+    if mut_rate_input:
+        try:
+            new_rate = float(mut_rate_input)
+            if 0.0 <= new_rate <= 1.0:
+                config.MUTATION_RATE = new_rate
+            else:
+                print("    突變率超出範圍，使用預設值")
+        except ValueError:
+            print("    輸入無效，使用預設值")
+
+    if mut_str_input:
+        try:
+            new_str = float(mut_str_input)
+            if 0.0 <= new_str <= 1.0:
+                config.MUTATION_STRENGTH = new_str
+            else:
+                print("    突變強度超出範圍，使用預設值")
+        except ValueError:
+            print("    輸入無效，使用預設值")
+
+    config.GENE_COUNT = config.GENES_PER_MOTOR * config.MOTOR_COUNT
+
+    # 顯示最終配置
+    print("\n" + "=" * 60)
+    print("最終配置:")
+    print(f"  生物類型: {config.CREATURE_TYPE}")
+    print(f"  族群大小: {config.POPULATION_SIZE}")
+    print(f"  突變率: {config.MUTATION_RATE}")
+    print(f"  突變強度: {config.MUTATION_STRENGTH}")
+    print("=" * 60)
+    print()
+
 
 class Simulation:
     def __init__(self):
         # 初始化 Pygame
         pygame.init()
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.screen = pygame.display.set_mode((config.WINDOW_WIDTH, config.WINDOW_HEIGHT))
         pygame.display.set_caption("2D生物行走演化模擬")
         self.clock = pygame.time.Clock()
 
         # 初始化渲染器
         self.renderer = Renderer(self.screen)
-        self.recorder = Recorder()
 
         # 初始化遺傳演算法
         self.ga = GeneticAlgorithm()
@@ -42,7 +126,7 @@ class Simulation:
 
     def _create_physics_space(self) -> pymunk.Space:
         space = pymunk.Space()
-        space.gravity = GRAVITY
+        space.gravity = config.GRAVITY
         return space
 
     def _add_ground(self, space: pymunk.Space) -> pymunk.Body:
@@ -51,7 +135,7 @@ class Simulation:
 
         # 創建一個地面
         ground_shape = pymunk.Segment(ground_body, (-1000, 0), (100000, 0), 5)
-        ground_shape.friction = GROUND_FRICTION
+        ground_shape.friction = config.GROUND_FRICTION
         ground_shape.collision_type = 3  # 地面碰撞類型
 
         space.add(ground_body, ground_shape)
@@ -79,7 +163,7 @@ class Simulation:
         self.spaces = []
         self.ground_bodies = []
 
-        for i in range(POPULATION_SIZE):
+        for i in range(config.POPULATION_SIZE):
             space = self._create_physics_space()
             self.spaces.append(space)
 
@@ -89,7 +173,7 @@ class Simulation:
 
             # 創建生物
             start_x = 100  
-            start_y = THIGH_LENGTH + SHIN_LENGTH + FOOT_HEIGHT + 20 
+            start_y = config.THIGH_LENGTH + config.SHIN_LENGTH + config.FOOT_HEIGHT + 20 
 
             creature = Creature(
                 space=space,
@@ -114,8 +198,8 @@ class Simulation:
         for i, (space, creature) in enumerate(zip(self.spaces, self.creatures)):
             if creature.is_alive:
                 # 更新物理
-                for _ in range(PHYSICS_STEPS):
-                    space.step(dt / PHYSICS_STEPS)
+                for _ in range(config.PHYSICS_STEPS):
+                    space.step(dt / config.PHYSICS_STEPS)
 
                 # 更新生物狀態
                 creature.update(dt, self.current_time)
@@ -126,7 +210,7 @@ class Simulation:
     def _check_generation_complete(self) -> bool:
         # 當所有生物都死亡或時間到達上限時結束
         all_dead = all(not c.is_alive for c in self.creatures)
-        time_up = self.current_time >= SIMULATION_TIME
+        time_up = self.current_time >= config.SIMULATION_TIME
 
         return all_dead or time_up
 
@@ -149,9 +233,6 @@ class Simulation:
                     else:
                         self.speed_multiplier = 2
 
-                elif event.key == pygame.K_r:
-                    self.recorder.toggle_recording()
-
                 elif event.key == pygame.K_n:
                     self._force_next_generation()
 
@@ -170,7 +251,7 @@ class Simulation:
             # 處理事件
             self._handle_events()
             if not self.is_paused:
-                dt = 1.0 / FPS
+                dt = 1.0 / config.FPS
 
                 # 根據速度倍率更新多次
                 for _ in range(self.speed_multiplier):
@@ -188,7 +269,7 @@ class Simulation:
                     avg_fitness = sum(c.fitness for c in self.creatures) / len(self.creatures)
                     stats = self.ga.get_statistics()
                     diversity = stats.get('current_diversity', 1.0)
-                    mut_rate = stats.get('current_mutation_rate', MUTATION_RATE)
+                    mut_rate = stats.get('current_mutation_rate', config.MUTATION_RATE)
 
                     print(f"Generation {self.ga.generation + 1} complete: "
                           f"Best={current_best:.1f}, Avg={avg_fitness:.1f}, "
@@ -198,7 +279,7 @@ class Simulation:
                     self._init_generation()
 
             # 渲染
-            display_creatures = self.creatures[:GRID_COUNT]
+            display_creatures = self.creatures[:config.GRID_COUNT]
             current_best = max(c.fitness for c in self.creatures) if self.creatures else 0
 
             self.renderer.render(
@@ -207,23 +288,17 @@ class Simulation:
                 best_fitness=max(current_best, self.best_fitness_ever),
                 current_time=self.current_time,
                 is_paused=self.is_paused,
-                is_recording=self.recorder.is_recording,
                 speed_multiplier=self.speed_multiplier
             )
-            if self.recorder.is_recording:
-                self.recorder.add_frame(self.screen)
 
             # 更新顯示
             pygame.display.flip()
-            self.clock.tick(FPS)
+            self.clock.tick(config.FPS)
 
         # 清理
         self._cleanup()
 
     def _cleanup(self):
-        if self.recorder.is_recording:
-            self.recorder.stop_recording()
-
         # 清理生物
         self._cleanup_creatures()
 
@@ -236,6 +311,9 @@ class Simulation:
 
 
 def main():
+    # 先進行配置
+    setup_config()
+
     try:
         sim = Simulation()
         sim.run()

@@ -142,13 +142,50 @@ COLOR_TEXT = (255, 255, 255)
 COLOR_GRID_LINE = (60, 60, 70)
 COLOR_DEAD = (150, 50, 50)
 
-# ==================== 錄影設定 ====================
-RECORDING_FPS = 30
-RECORDING_FILENAME = "evolution_recording.mp4"
-
 # ==================== 反射機制設定 ====================
 # 當軀幹傾斜時，調整髖關節輸出
 REFLEX_ENABLED = True
 REFLEX_BALANCE_GAIN = 1.0          
 REFLEX_BALANCE_THRESHOLD = 0.15   # 觸發平衡反射的角度閾值
 REFLEX_VELOCITY_GAIN = 0.5        
+
+
+def set_creature_type(creature_type: str) -> None:
+    """更新生物類型，並同步更新所有依賴該類型的結構參數。"""
+    global CREATURE_TYPE
+    global TORSO_WIDTH, TORSO_HEIGHT, TORSO_MASS
+    global MOTOR_COUNT, QUADRUPED_LEG_X_OFFSET
+    global HIP_MIN_ANGLE, HIP_MAX_ANGLE, KNEE_MIN_ANGLE, KNEE_MAX_ANGLE
+    global GENE_COUNT, EXPECTED_STANDING_HEIGHT
+
+    normalized = (creature_type or "").strip().upper()
+    if normalized not in {"BIPED", "QUADRUPED"}:
+        raise ValueError(f"Unknown creature type: {creature_type!r}")
+
+    CREATURE_TYPE = normalized
+
+    if CREATURE_TYPE == "QUADRUPED":
+        TORSO_WIDTH = 100
+        TORSO_HEIGHT = 20
+        TORSO_MASS = 8
+        MOTOR_COUNT = 8
+        QUADRUPED_LEG_X_OFFSET = 8
+
+        HIP_MIN_ANGLE = -1.2
+        HIP_MAX_ANGLE = 1.2
+        KNEE_MIN_ANGLE = -0.5
+        KNEE_MAX_ANGLE = 1.5
+    else:  # BIPED
+        TORSO_WIDTH = 60
+        TORSO_HEIGHT = 30
+        TORSO_MASS = 6
+        MOTOR_COUNT = 4
+        QUADRUPED_LEG_X_OFFSET = 0
+
+        HIP_MIN_ANGLE = -0.8
+        HIP_MAX_ANGLE = 0.6
+        KNEE_MIN_ANGLE = 0.0
+        KNEE_MAX_ANGLE = 1.2
+
+    GENE_COUNT = GENES_PER_MOTOR * MOTOR_COUNT
+    EXPECTED_STANDING_HEIGHT = THIGH_LENGTH + SHIN_LENGTH + FOOT_HEIGHT + TORSO_HEIGHT / 2
