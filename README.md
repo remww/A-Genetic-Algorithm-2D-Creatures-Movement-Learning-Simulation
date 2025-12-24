@@ -15,13 +15,6 @@
 - **自適應突變**：當族群多樣性降低時自動提高突變率，避免過早收斂
 - **交互式配置**：啟動時可自訂核心參數，無需修改程式碼
 
-## 技術架構
-
-- **物理引擎**：Pymunk (基於 Chipmunk2D)
-- **圖形界面**：Pygame
-- **演化算法**：遺傳演算法 (Genetic Algorithm)
-- **程式語言**：Python 3.x
-
 ## 安裝需求
 
 ### Python 套件
@@ -30,14 +23,9 @@
 pip install pygame pymunk
 ```
 
-### 系統需求
-
-- Python 3.7+
-- 支援的作業系統：Windows、macOS、Linux
-
 ## 使用方法
 
-### 快速開始
+### 開始
 
 ```bash
 python main.py
